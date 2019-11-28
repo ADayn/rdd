@@ -73,21 +73,34 @@ fn from_rec(e: &Expr, rem_support: &[String], cof_asgn: &mut Env, bdd: &mut BDD)
 		let neg_cof_node = from_rec(e, &rem_support[1..], cof_asgn, bdd);
 		cof_asgn.insert(x.clone(), true);
 		let pos_cof_node = from_rec(e, &rem_support[1..], cof_asgn, bdd);
-		let new_node = Internal {
-			label: x.clone(),
-			t_arc: pos_cof_node,
-			e_arc: neg_cof_node
-		};
-		match bdd.nodes.iter().position(|x| x.clone() == new_node) {
-			Some(i) => i,
-			None => {
-				// Terminal has not been created as node yet, make it
-				bdd.nodes.push(new_node);
-				bdd.nodes.len() - 1
-			},
+		if neg_cof_node == pos_cof_node {
+			neg_cof_node
+		} else {
+			let new_node = Internal {
+				label: x.clone(),
+				t_arc: pos_cof_node,
+				e_arc: neg_cof_node
+			};
+			// If exists use current node, else make new node.
+			match bdd.nodes.iter().position(|x| x.clone() == new_node) {
+				Some(i) => i,
+				None => {
+					// Terminal has not been created as node yet, make it
+					bdd.nodes.push(new_node);
+					bdd.nodes.len() - 1
+				},
+			}
 		}
 	}
 }
+
+// fn textual_rep(bdd: &BDD) -> String {
+// 	fn textual_rep_rec(idx: NodeIdx) -> String {
+// 		"69".to_string()
+// 	}
+// 	textual_rep_rec(bdd.f)
+// }
+
 
 type Env = HashMap<String, bool>;
 
@@ -96,12 +109,15 @@ use crate::BDD_Node::*;
 use crate::BOp::*;
 
 fn main() {
-	let x1 = "x1".to_string();
+	let x1 = "a".to_string();
+	let x2 = "b".to_string();
 
 	fn t() -> Expr { Lit(true) };
 	fn f() -> Expr { Lit(false) };
 	let vx1: Expr = Var(x1.clone());
-	let e: Expr = Binary(Box::new(t()), And, Box::new(vx1));
+	let vx2: Expr = Var(x2.clone());
+	// let e_old: Expr = Binary(Box::new(t()), And, Box::new(vx1));
+	let e: Expr = Binary(Box::new(vx1), Or, Box::new(vx2));
 	// let h: Expr = Binary(Box::new(g), Or, Box::new(f()));
 
 	let mut env: Env = HashMap::new();
@@ -111,7 +127,9 @@ fn main() {
     println!("Evaluating: {:?}", &e);
     println!("Free vars: {:?}", free_vars(&e));
     println!("Result: {:?}", eval(&e, &env));
-    println!("BDD: {:?}", from(&e, &[x1.clone()]));
+    let bdd = from(&e, &[x1.clone(), x2.clone()]);
+    println!("BDD: {:?}", &bdd);
+    println!("BDD text: {:?}", textual_rep(&bdd));
 }
 
 fn free_vars(e: &Expr) -> HashSet<String> {
