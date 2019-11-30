@@ -12,7 +12,7 @@ use rdd::expr::*;
 use Expr::*;
 use BOp::*;
 
-use rdd::bdd::*;
+use rdd::naive_bdd::*;
 
 macro_rules! run_bdd {
 	( $x:expr ) => {

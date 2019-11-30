@@ -11,7 +11,7 @@ name = "rdd"
 path = "src/lib.rs"
 
 [[bin]]
-name = "mainbin"
+name = "rdd_main"
 path = "src/bin.rs"
 
 [dependencies]
@@ -24,5 +24,5 @@ name = "test_benches"
 harness = false
 
 [profile.release]
-# For cargo build --release; and sudo dtrace -c './target/release/grrs' -o out.stacks -n 'profile-997 /execname == "grrs"/ { @[ustack(100)] = count(); }'; and FlameGraph/stackcollapse.pl  out.stacks | FlameGraph/flamegraph.pl  > pretty-graph.svg
+# For cargo build --release; and sudo dtrace -c './target/release/rdd_main' -o out.stacks -n 'profile-997 /execname == "rdd_main"/ { @[ustack(100)] = count(); }'; and FlameGraph/stackcollapse.pl  out.stacks | FlameGraph/flamegraph.pl  > pretty-graph.svg
 debug = true

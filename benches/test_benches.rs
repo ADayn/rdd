@@ -3,7 +3,7 @@ extern crate criterion;
 
 use criterion::{Criterion, BenchmarkId};
 use rdd::expr;
-use rdd::bdd;
+use rdd::naive_bdd;
 
 fn naive_bdd_comparator(c: &mut Criterion) {
     // c.bench_function("fib 20", |b| b.iter(|| fibonacci(black_box(20))));
@@ -12,13 +12,13 @@ fn naive_bdd_comparator(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("Degenerate order", bits), &bits, |b, &bits| {
             let (comp, ord_bad, _) = expr::gen::comparator(*bits);
             b.iter(|| {
-            	bdd::from(&comp, &ord_bad)
+            	naive_bdd::from(&comp, &ord_bad)
             });
         });
         group.bench_with_input(BenchmarkId::new("Efficient order", bits), &bits, |b, &bits| {
             let (comp, _, ord_good) = expr::gen::comparator(*bits);
             b.iter(|| {
-            	bdd::from(&comp, &ord_good)
+            	naive_bdd::from(&comp, &ord_good)
             });
         });
     }

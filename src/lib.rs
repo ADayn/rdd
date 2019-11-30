@@ -1,2 +1,2 @@
 pub mod expr;
-pub mod bdd;
+pub mod naive_bdd;

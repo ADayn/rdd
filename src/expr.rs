@@ -14,12 +14,12 @@ pub enum BOp {
 #[derive(Clone, Debug)]
 pub enum Expr {
     Lit(bool),
-    Var(String),
+    Var(usize),
     Not(Box<Expr>),
     Binary(Box<Expr>, BOp, Box<Expr>),
 }
 
-pub type Env = HashMap<String, bool>;
+pub type Env = Vec<bool>;
 
 use Expr::*;
 use BOp::*;
@@ -41,10 +41,7 @@ pub fn bin(e_1: Expr, bop: BOp, e_2: Expr) -> Expr {
 pub fn eval(e: &Expr, env: &Env) -> bool {
 	match e {
 		Lit(b) => *b,
-		Var(x) => match env.get(x) {
-			Some(&b) => b,
-			_ => panic!(),
-		},
+		Var(x) => env[*x],
 		Not(e) => !eval(&e, env),
 		Binary(e1, And, e2) => eval(&e1, env) && eval(&e2, env),
 		Binary(e1, Or , e2) => eval(&e1, env) || eval(&e2, env),
@@ -81,41 +78,46 @@ pub mod gen {
 	use BOp::*;
 
 	// comparator function for xn..1 > yn..1
-	pub fn comparator<'a>(n_bits: u32) -> (Expr, Vec<usize>, Vec<usize>) {
-		let mut var_ord_bad: Vec<String> = vec![];
-		let mut var_ord_good: Vec<String> = vec![];
-		for i in 1..=n_bits {
-			var_ord_bad.push(format!("y{}", i));
+	pub fn comparator<'a>(n_bits: usize) -> (Expr, Vec<usize>, Vec<usize>) {
+		let mut var_ord_bad: Vec<usize> = vec![];
+		let mut var_ord_good: Vec<usize> = vec![];
+		for i in 0..n_bits {
+			// x1..xn
+			var_ord_bad.push(i * 2);
 		}
-		for i in 1..=n_bits {
-			var_ord_bad.push(format!("x{}", i));
+		for i in 0..n_bits {
+			// y1..yn
+			var_ord_bad.push(i * 2 + 1);
 		}
-		for i in 1..=n_bits {
-			var_ord_good.push(format!("x{}", i));
-			var_ord_good.push(format!("y{}", i));
+		for i in 0..n_bits {
+			// xi
+			var_ord_good.push(i * 2);
+			// yi
+			var_ord_good.push(i * 2 + 1);
 		}
 		(comparator_rec(n_bits), var_ord_bad, var_ord_good)
 	}
 
-	fn comparator_rec<'a>(n_bits: u32) -> Expr {
+	fn comparator_rec<'a>(n_bits: usize) -> Expr {
 		// (xn && yn || !xn && !yn) && ...rec)
 		if n_bits == 0 {
 			Lit(true)
 		} else {
-			let xn = format!("x{}", n_bits);
-			let yn = format!("y{}", n_bits);
+			let var_idx = n_bits - 1;
+			let xn = var_idx * 2;
+			let yn = var_idx * 2 + 1;
 			bin(
 				bin(
 					bin(
-						not(Var(xn.clone())),
+						not(Var(xn)),
 						And,
-						not(Var(yn.clone())),
+						not(Var(yn)),
 					),
 					Or,
 					bin(
-						Var(xn.clone()),
+						Var(xn),
 						And,
-						Var(yn.clone()),
+						Var(yn),
 					),
 				),
 				And,
@@ -124,46 +126,46 @@ pub mod gen {
 		}
 	}
 
-	pub fn lt<'a>(n_bits: u32) -> (Expr, Vec<String>, Vec<String>) {
-		let mut var_ord_bad: Vec<String> = vec![];
-		let mut var_ord_good: Vec<String> = vec![];
-		for i in 1..=n_bits {
-			var_ord_bad.push(format!("y{}", i));
-		}
-		for i in 1..=n_bits {
-			var_ord_bad.push(format!("x{}", i));
-		}
-		for i in 1..=n_bits {
-			var_ord_good.push(format!("x{}", i));
-			var_ord_good.push(format!("y{}", i));
-		}
-		(lt_rec(n_bits), var_ord_bad, var_ord_good)
-	}
+	// pub fn lt<'a>(n_bits: u32) -> (Expr, Vec<String>, Vec<String>) {
+	// 	let mut var_ord_bad: Vec<String> = vec![];
+	// 	let mut var_ord_good: Vec<String> = vec![];
+	// 	for i in 1..=n_bits {
+	// 		var_ord_bad.push(format!("y{}", i));
+	// 	}
+	// 	for i in 1..=n_bits {
+	// 		var_ord_bad.push(format!("x{}", i));
+	// 	}
+	// 	for i in 1..=n_bits {
+	// 		var_ord_good.push(format!("x{}", i));
+	// 		var_ord_good.push(format!("y{}", i));
+	// 	}
+	// 	(lt_rec(n_bits), var_ord_bad, var_ord_good)
+	// }
 
-	fn lt_rec<'a>(n_bits: u32) -> Expr {
-		// xn && !yn || (!xn && !yn && ...rec)
-		if n_bits == 0 {
-			Lit(true)
-		} else {
-			let xn = format!("x{}", n_bits);
-			let yn = format!("y{}", n_bits);
-			bin(
-				bin(
-					Var(xn.clone()),
-					And,
-					not(Var(yn.clone())),
-				),
-				Or,
-				bin(
-					bin(
-						not(Var(xn.clone())),
-						And,
-						not(Var(yn.clone())),
-					),
-					And,
-					comparator_rec(n_bits - 1),
-				)
-			)
-		}
-	}
+	// fn lt_rec<'a>(n_bits: u32) -> Expr {
+	// 	// xn && !yn || (!xn && !yn && ...rec)
+	// 	if n_bits == 0 {
+	// 		Lit(true)
+	// 	} else {
+	// 		let xn = format!("x{}", n_bits);
+	// 		let yn = format!("y{}", n_bits);
+	// 		bin(
+	// 			bin(
+	// 				Var(xn.clone()),
+	// 				And,
+	// 				not(Var(yn.clone())),
+	// 			),
+	// 			Or,
+	// 			bin(
+	// 				bin(
+	// 					not(Var(xn.clone())),
+	// 					And,
+	// 					not(Var(yn.clone())),
+	// 				),
+	// 				And,
+	// 				comparator_rec(n_bits - 1),
+	// 			)
+	// 		)
+	// 	}
+	// }
 }
