@@ -1,10 +1,28 @@
 [package]
-name = "grrs"
+name = "rdd"
 version = "0.1.0"
 authors = ["Albert Dayn <Albert.Dayn@Colorado.edu>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "rdd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mainbin"
+path = "src/bin.rs"
+
 [dependencies]
-daggy = "*"
+
+[dev-dependencies]
+criterion = "0.2"
+
+[[bench]]
+name = "test_benches"
+harness = false
+
+[profile.release]
+# For cargo build --release; and sudo dtrace -c './target/release/grrs' -o out.stacks -n 'profile-997 /execname == "grrs"/ { @[ustack(100)] = count(); }'; and FlameGraph/stackcollapse.pl  out.stacks | FlameGraph/flamegraph.pl  > pretty-graph.svg
+debug = true
