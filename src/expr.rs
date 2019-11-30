@@ -81,7 +81,7 @@ pub mod gen {
 	use BOp::*;
 
 	// comparator function for xn..1 > yn..1
-	pub fn comparator<'a>(n_bits: u32) -> (Expr, Vec<String>, Vec<String>) {
+	pub fn comparator<'a>(n_bits: u32) -> (Expr, Vec<usize>, Vec<usize>) {
 		let mut var_ord_bad: Vec<String> = vec![];
 		let mut var_ord_good: Vec<String> = vec![];
 		for i in 1..=n_bits {

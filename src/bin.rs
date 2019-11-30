@@ -52,9 +52,9 @@ fn main() {
 	// println!("BDD: {:?}", &bdd);
 
 	// for timing tests:
-	run_bdd!(2);
+	// run_bdd!(2);
 	// thread::sleep(Duration::from_secs(1));
-	run_bdd!(5);
+	// run_bdd!(5);
 	// thread::sleep(Duration::from_secs(1));
 	run_bdd!(10);
 }
