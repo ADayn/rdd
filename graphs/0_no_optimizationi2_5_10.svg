@@ -1,0 +1,1516 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="678" onload="init(evt)" viewBox="0 0 1200 678" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+	}
+
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom();
+			zoom(target);
+		}
+		else if (e.target.id == "unzoom") unzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+	}, false)
+
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+		return;
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		// Fit in full text width
+		if (/^ *$/.test(txt) || t.getSubStringLength(0, txt.length) < w)
+			return;
+
+		for (var x = txt.length - 2; x > 0; x--) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom() {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			update_text(el[i]);
+		}
+		search();
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) {
+				currentSearchTerm = term;
+				search();
+			}
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (currentSearchTerm === null) return;
+		var term = currentSearchTerm;
+
+		var re = new RegExp(term, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="678.0" fill="url(#background)"  />
+<text id="title" x="600.00" y="24" >Flame Graph</text>
+<text id="details" x="10.00" y="661" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1090.00" y="24" >Search</text>
+<text id="ignorecase" x="1174.00" y="24" >ic</text>
+<text id="matched" x="1090.00" y="661" > </text>
+<g id="frames">
+<g >
+<title>libsystem_malloc.dylib`tiny_size (2 samples, 0.17%)</title><rect x="306.8" y="133" width="2.0" height="15.0" fill="rgb(226,88,23)" rx="2" ry="2" />
+<text  x="309.79" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (4 samples, 0.35%)</title><rect x="46.8" y="133" width="4.1" height="15.0" fill="rgb(231,216,37)" rx="2" ry="2" />
+<text  x="49.84" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (80 samples, 6.94%)</title><rect x="363.1" y="85" width="81.9" height="15.0" fill="rgb(230,3,20)" rx="2" ry="2" />
+<text  x="366.08" y="95.5" >libsystem..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (5 samples, 0.43%)</title><rect x="45.8" y="165" width="5.1" height="15.0" fill="rgb(213,149,6)" rx="2" ry="2" />
+<text  x="48.82" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (1 samples, 0.09%)</title><rect x="1160.3" y="165" width="1.0" height="15.0" fill="rgb(253,32,0)" rx="2" ry="2" />
+<text  x="1163.32" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (5 samples, 0.43%)</title><rect x="45.8" y="181" width="5.1" height="15.0" fill="rgb(241,10,6)" rx="2" ry="2" />
+<text  x="48.82" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="19.2" y="213" width="1.0" height="15.0" fill="rgb(220,229,12)" rx="2" ry="2" />
+<text  x="22.21" y="223.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (33 samples, 2.86%)</title><rect x="73.5" y="197" width="33.7" height="15.0" fill="rgb(227,99,4)" rx="2" ry="2" />
+<text  x="76.45" y="207.5" >gr..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (1 samples, 0.09%)</title><rect x="16.1" y="293" width="1.1" height="15.0" fill="rgb(246,186,13)" rx="2" ry="2" />
+<text  x="19.14" y="303.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="20.2" y="229" width="1.1" height="15.0" fill="rgb(239,148,4)" rx="2" ry="2" />
+<text  x="23.23" y="239.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (1 samples, 0.09%)</title><rect x="12.0" y="293" width="1.1" height="15.0" fill="rgb(222,109,44)" rx="2" ry="2" />
+<text  x="15.05" y="303.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (27 samples, 2.34%)</title><rect x="757.1" y="69" width="27.6" height="15.0" fill="rgb(252,222,18)" rx="2" ry="2" />
+<text  x="760.09" y="79.5" >g..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_malloc (2 samples, 0.17%)</title><rect x="271.0" y="101" width="2.0" height="15.0" fill="rgb(224,225,7)" rx="2" ry="2" />
+<text  x="273.97" y="111.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (13 samples, 1.13%)</title><rect x="60.1" y="181" width="13.4" height="15.0" fill="rgb(213,6,42)" rx="2" ry="2" />
+<text  x="63.15" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (1 samples, 0.09%)</title><rect x="1158.3" y="181" width="1.0" height="15.0" fill="rgb(207,130,15)" rx="2" ry="2" />
+<text  x="1161.27" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (1 samples, 0.09%)</title><rect x="11.0" y="309" width="1.0" height="15.0" fill="rgb(221,50,24)" rx="2" ry="2" />
+<text  x="14.02" y="319.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::eval::h836d00b9c3c9e0d7 (155 samples, 13.44%)</title><rect x="675.2" y="85" width="158.7" height="15.0" fill="rgb(211,135,4)" rx="2" ry="2" />
+<text  x="678.22" y="95.5" >grrs`grrs::eval::h83..</text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (1 samples, 0.09%)</title><rect x="531.9" y="133" width="1.1" height="15.0" fill="rgb(249,90,50)" rx="2" ry="2" />
+<text  x="534.94" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (3 samples, 0.26%)</title><rect x="25.4" y="229" width="3.0" height="15.0" fill="rgb(222,13,34)" rx="2" ry="2" />
+<text  x="28.35" y="239.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,144 samples, 99.22%)</title><rect x="18.2" y="309" width="1170.8" height="15.0" fill="rgb(233,127,43)" rx="2" ry="2" />
+<text  x="21.19" y="319.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (23 samples, 1.99%)</title><rect x="145.1" y="165" width="23.5" height="15.0" fill="rgb(223,29,23)" rx="2" ry="2" />
+<text  x="148.09" y="175.5" >g..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_malloc (1 samples, 0.09%)</title><rect x="350.8" y="117" width="1.0" height="15.0" fill="rgb(218,176,14)" rx="2" ry="2" />
+<text  x="353.80" y="127.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,152 samples, 99.91%)</title><rect x="11.0" y="437" width="1179.0" height="15.0" fill="rgb(221,11,21)" rx="2" ry="2" />
+<text  x="14.02" y="447.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>grrs`std::collections::hash::map::HashMap$LT$K$C$V$C$S$GT$::insert::he88c83eb029c7c46 (72 samples, 6.24%)</title><rect x="1007.8" y="165" width="73.7" height="15.0" fill="rgb(221,229,10)" rx="2" ry="2" />
+<text  x="1010.83" y="175.5" >grrs`std..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_malloc (3 samples, 0.26%)</title><rect x="116.4" y="133" width="3.1" height="15.0" fill="rgb(221,206,33)" rx="2" ry="2" />
+<text  x="119.44" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (18 samples, 1.56%)</title><rect x="75.5" y="149" width="18.4" height="15.0" fill="rgb(228,44,24)" rx="2" ry="2" />
+<text  x="78.50" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,143 samples, 99.13%)</title><rect x="19.2" y="293" width="1169.8" height="15.0" fill="rgb(245,216,54)" rx="2" ry="2" />
+<text  x="22.21" y="303.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (14 samples, 1.21%)</title><rect x="906.5" y="117" width="14.3" height="15.0" fill="rgb(246,7,35)" rx="2" ry="2" />
+<text  x="909.51" y="127.5" ></text>
+</g>
+<g >
+<title>grrs`std::panicking::try::do_call::ha1a4587e2a4eb439 (1,152 samples, 99.91%)</title><rect x="11.0" y="533" width="1179.0" height="15.0" fill="rgb(236,49,45)" rx="2" ry="2" />
+<text  x="14.02" y="543.5" >grrs`std::panicking::try::do_call::ha1a4587e2a4eb439</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (6 samples, 0.52%)</title><rect x="174.8" y="165" width="6.1" height="15.0" fill="rgb(227,213,9)" rx="2" ry="2" />
+<text  x="177.77" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (4 samples, 0.35%)</title><rect x="33.5" y="149" width="4.1" height="15.0" fill="rgb(206,196,39)" rx="2" ry="2" />
+<text  x="36.54" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (1 samples, 0.09%)</title><rect x="22.3" y="245" width="1.0" height="15.0" fill="rgb(214,62,6)" rx="2" ry="2" />
+<text  x="25.28" y="255.5" ></text>
+</g>
+<g >
+<title>grrs`main (1,153 samples, 100.00%)</title><rect x="10.0" y="581" width="1180.0" height="15.0" fill="rgb(218,98,15)" rx="2" ry="2" />
+<text  x="13.00" y="591.5" >grrs`main</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_from_free_list (1 samples, 0.09%)</title><rect x="166.6" y="85" width="1.0" height="15.0" fill="rgb(251,33,1)" rx="2" ry="2" />
+<text  x="169.58" y="95.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (5 samples, 0.43%)</title><rect x="38.7" y="181" width="5.1" height="15.0" fill="rgb(213,74,16)" rx="2" ry="2" />
+<text  x="41.66" y="191.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (1 samples, 0.09%)</title><rect x="13.1" y="325" width="1.0" height="15.0" fill="rgb(241,122,8)" rx="2" ry="2" />
+<text  x="16.07" y="335.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (3 samples, 0.26%)</title><rect x="15.1" y="309" width="3.1" height="15.0" fill="rgb(218,148,5)" rx="2" ry="2" />
+<text  x="18.12" y="319.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (1 samples, 0.09%)</title><rect x="11.0" y="261" width="1.0" height="15.0" fill="rgb(217,25,15)" rx="2" ry="2" />
+<text  x="14.02" y="271.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,022 samples, 88.64%)</title><rect x="107.2" y="197" width="1046.0" height="15.0" fill="rgb(245,37,26)" rx="2" ry="2" />
+<text  x="110.22" y="207.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (17 samples, 1.47%)</title><rect x="987.4" y="149" width="17.4" height="15.0" fill="rgb(214,13,36)" rx="2" ry="2" />
+<text  x="990.36" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (58 samples, 5.03%)</title><rect x="198.3" y="133" width="59.4" height="15.0" fill="rgb(215,168,35)" rx="2" ry="2" />
+<text  x="201.31" y="143.5" >libsys..</text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (10 samples, 0.87%)</title><rect x="823.6" y="69" width="10.3" height="15.0" fill="rgb(245,119,2)" rx="2" ry="2" />
+<text  x="826.62" y="79.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::eval::h836d00b9c3c9e0d7 (285 samples, 24.72%)</title><rect x="551.4" y="133" width="291.7" height="15.0" fill="rgb(205,132,45)" rx="2" ry="2" />
+<text  x="554.39" y="143.5" >grrs`grrs::eval::h836d00b9c3c9e0d7</text>
+</g>
+<g >
+<title>grrs`std::collections::hash::map::HashMap$LT$K$C$V$C$S$GT$::insert::he88c83eb029c7c46 (125 samples, 10.84%)</title><rect x="843.1" y="149" width="127.9" height="15.0" fill="rgb(231,10,47)" rx="2" ry="2" />
+<text  x="846.06" y="159.5" >grrs`std::collec..</text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (77 samples, 6.68%)</title><rect x="454.2" y="149" width="78.8" height="15.0" fill="rgb(221,41,7)" rx="2" ry="2" />
+<text  x="457.16" y="159.5" >grrs`_$LT..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (21 samples, 1.82%)</title><rect x="120.5" y="117" width="21.5" height="15.0" fill="rgb(219,58,43)" rx="2" ry="2" />
+<text  x="123.53" y="127.5" >l..</text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (58 samples, 5.03%)</title><rect x="261.8" y="165" width="59.3" height="15.0" fill="rgb(248,91,14)" rx="2" ry="2" />
+<text  x="264.76" y="175.5" >grrs`_..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="301.7" y="117" width="1.0" height="15.0" fill="rgb(215,42,16)" rx="2" ry="2" />
+<text  x="304.67" y="127.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (1 samples, 0.09%)</title><rect x="20.2" y="261" width="1.1" height="15.0" fill="rgb(221,114,17)" rx="2" ry="2" />
+<text  x="23.23" y="271.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,114 samples, 96.62%)</title><rect x="38.7" y="229" width="1140.0" height="15.0" fill="rgb(212,144,43)" rx="2" ry="2" />
+<text  x="41.66" y="239.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_free_no_lock (3 samples, 0.26%)</title><rect x="1175.7" y="197" width="3.0" height="15.0" fill="rgb(242,97,50)" rx="2" ry="2" />
+<text  x="1178.67" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="18.2" y="229" width="1.0" height="15.0" fill="rgb(230,27,20)" rx="2" ry="2" />
+<text  x="21.19" y="239.5" ></text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (1 samples, 0.09%)</title><rect x="1152.1" y="181" width="1.1" height="15.0" fill="rgb(211,6,20)" rx="2" ry="2" />
+<text  x="1155.13" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_free_no_lock (3 samples, 0.26%)</title><rect x="1148.0" y="165" width="3.1" height="15.0" fill="rgb(245,182,53)" rx="2" ry="2" />
+<text  x="1151.04" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,126 samples, 97.66%)</title><rect x="30.5" y="245" width="1152.3" height="15.0" fill="rgb(240,116,17)" rx="2" ry="2" />
+<text  x="33.47" y="255.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (1 samples, 0.09%)</title><rect x="18.2" y="293" width="1.0" height="15.0" fill="rgb(235,154,45)" rx="2" ry="2" />
+<text  x="21.19" y="303.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (22 samples, 1.91%)</title><rect x="119.5" y="133" width="22.5" height="15.0" fill="rgb(229,86,15)" rx="2" ry="2" />
+<text  x="122.51" y="143.5" >l..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (28 samples, 2.43%)</title><rect x="113.4" y="149" width="28.6" height="15.0" fill="rgb(225,45,52)" rx="2" ry="2" />
+<text  x="116.37" y="159.5" >li..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (1 samples, 0.09%)</title><rect x="24.3" y="165" width="1.1" height="15.0" fill="rgb(218,78,36)" rx="2" ry="2" />
+<text  x="27.33" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (3 samples, 0.26%)</title><rect x="30.5" y="197" width="3.0" height="15.0" fill="rgb(230,71,27)" rx="2" ry="2" />
+<text  x="33.47" y="207.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (14 samples, 1.21%)</title><rect x="874.8" y="133" width="14.3" height="15.0" fill="rgb(213,6,37)" rx="2" ry="2" />
+<text  x="877.79" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (4 samples, 0.35%)</title><rect x="33.5" y="181" width="4.1" height="15.0" fill="rgb(223,76,7)" rx="2" ry="2" />
+<text  x="36.54" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="11.0" y="277" width="1.0" height="15.0" fill="rgb(225,203,31)" rx="2" ry="2" />
+<text  x="14.02" y="287.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (13 samples, 1.13%)</title><rect x="60.1" y="165" width="13.4" height="15.0" fill="rgb(222,64,24)" rx="2" ry="2" />
+<text  x="63.15" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (3 samples, 0.26%)</title><rect x="30.5" y="181" width="3.0" height="15.0" fill="rgb(207,195,2)" rx="2" ry="2" />
+<text  x="33.47" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (92 samples, 7.98%)</title><rect x="351.8" y="117" width="94.2" height="15.0" fill="rgb(232,16,35)" rx="2" ry="2" />
+<text  x="354.82" y="127.5" >libsystem_m..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (1 samples, 0.09%)</title><rect x="1182.8" y="245" width="1.1" height="15.0" fill="rgb(250,178,27)" rx="2" ry="2" />
+<text  x="1185.84" y="255.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_size (2 samples, 0.17%)</title><rect x="171.7" y="149" width="2.0" height="15.0" fill="rgb(252,21,27)" rx="2" ry="2" />
+<text  x="174.70" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_size (1 samples, 0.09%)</title><rect x="101.1" y="165" width="1.0" height="15.0" fill="rgb(250,188,54)" rx="2" ry="2" />
+<text  x="104.08" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`__rdl_alloc (2 samples, 0.17%)</title><rect x="533.0" y="149" width="2.0" height="15.0" fill="rgb(224,26,21)" rx="2" ry="2" />
+<text  x="535.97" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::eval::h836d00b9c3c9e0d7 (4 samples, 0.35%)</title><rect x="539.1" y="149" width="4.1" height="15.0" fill="rgb(249,113,21)" rx="2" ry="2" />
+<text  x="542.11" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (1 samples, 0.09%)</title><rect x="1185.9" y="245" width="1.0" height="15.0" fill="rgb(240,145,30)" rx="2" ry="2" />
+<text  x="1188.91" y="255.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_size (1 samples, 0.09%)</title><rect x="963.8" y="133" width="1.0" height="15.0" fill="rgb(237,119,39)" rx="2" ry="2" />
+<text  x="966.82" y="143.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (2 samples, 0.17%)</title><rect x="819.5" y="37" width="2.1" height="15.0" fill="rgb(235,177,47)" rx="2" ry="2" />
+<text  x="822.52" y="47.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (85 samples, 7.37%)</title><rect x="358.0" y="101" width="87.0" height="15.0" fill="rgb(233,164,0)" rx="2" ry="2" />
+<text  x="360.96" y="111.5" >libsystem_..</text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,086 samples, 94.19%)</title><rect x="58.1" y="213" width="1111.4" height="15.0" fill="rgb(214,194,8)" rx="2" ry="2" />
+<text  x="61.10" y="223.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_size (1 samples, 0.09%)</title><rect x="905.5" y="117" width="1.0" height="15.0" fill="rgb(237,184,32)" rx="2" ry="2" />
+<text  x="908.49" y="127.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (3 samples, 0.26%)</title><rect x="1172.6" y="197" width="3.1" height="15.0" fill="rgb(216,174,27)" rx="2" ry="2" />
+<text  x="1175.60" y="207.5" ></text>
+</g>
+<g >
+<title>grrs`std::collections::hash::map::HashMap$LT$K$C$V$C$S$GT$::insert::he88c83eb029c7c46 (3 samples, 0.26%)</title><rect x="1178.7" y="229" width="3.1" height="15.0" fill="rgb(215,211,44)" rx="2" ry="2" />
+<text  x="1181.74" y="239.5" ></text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memmove$VARIANT$Haswell (2 samples, 0.17%)</title><rect x="259.7" y="149" width="2.1" height="15.0" fill="rgb(225,56,7)" rx="2" ry="2" />
+<text  x="262.71" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (36 samples, 3.12%)</title><rect x="468.5" y="69" width="36.8" height="15.0" fill="rgb(246,134,7)" rx="2" ry="2" />
+<text  x="471.49" y="79.5" >lib..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (1 samples, 0.09%)</title><rect x="11.0" y="293" width="1.0" height="15.0" fill="rgb(233,176,38)" rx="2" ry="2" />
+<text  x="14.02" y="303.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (1 samples, 0.09%)</title><rect x="1179.8" y="213" width="1.0" height="15.0" fill="rgb(253,79,6)" rx="2" ry="2" />
+<text  x="1182.77" y="223.5" ></text>
+</g>
+<g >
+<title>grrs`std::collections::hash::map::HashMap$LT$K$C$V$C$S$GT$::insert::he88c83eb029c7c46 (6 samples, 0.52%)</title><rect x="1169.5" y="213" width="6.2" height="15.0" fill="rgb(220,110,29)" rx="2" ry="2" />
+<text  x="1172.53" y="223.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (4 samples, 0.35%)</title><rect x="983.3" y="133" width="4.1" height="15.0" fill="rgb(249,125,33)" rx="2" ry="2" />
+<text  x="986.27" y="143.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,151 samples, 99.83%)</title><rect x="12.0" y="341" width="1178.0" height="15.0" fill="rgb(218,81,19)" rx="2" ry="2" />
+<text  x="15.05" y="351.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,152 samples, 99.91%)</title><rect x="11.0" y="357" width="1179.0" height="15.0" fill="rgb(242,194,17)" rx="2" ry="2" />
+<text  x="14.02" y="367.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (4 samples, 0.35%)</title><rect x="94.9" y="181" width="4.1" height="15.0" fill="rgb(240,217,21)" rx="2" ry="2" />
+<text  x="97.94" y="191.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (4 samples, 0.35%)</title><rect x="33.5" y="213" width="4.1" height="15.0" fill="rgb(234,146,47)" rx="2" ry="2" />
+<text  x="36.54" y="223.5" ></text>
+</g>
+<g >
+<title>grrs`__rdl_dealloc (1 samples, 0.09%)</title><rect x="180.9" y="181" width="1.0" height="15.0" fill="rgb(213,54,2)" rx="2" ry="2" />
+<text  x="183.91" y="191.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (20 samples, 1.73%)</title><rect x="654.8" y="85" width="20.4" height="15.0" fill="rgb(237,102,22)" rx="2" ry="2" />
+<text  x="657.75" y="95.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (1 samples, 0.09%)</title><rect x="19.2" y="229" width="1.0" height="15.0" fill="rgb(208,200,0)" rx="2" ry="2" />
+<text  x="22.21" y="239.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,135 samples, 98.44%)</title><rect x="23.3" y="261" width="1161.6" height="15.0" fill="rgb(208,140,48)" rx="2" ry="2" />
+<text  x="26.30" y="271.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (1 samples, 0.09%)</title><rect x="14.1" y="293" width="1.0" height="15.0" fill="rgb(223,101,15)" rx="2" ry="2" />
+<text  x="17.09" y="303.5" ></text>
+</g>
+<g >
+<title>grrs`__rust_dealloc (1 samples, 0.09%)</title><rect x="538.1" y="149" width="1.0" height="15.0" fill="rgb(219,118,14)" rx="2" ry="2" />
+<text  x="541.08" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (5 samples, 0.43%)</title><rect x="889.1" y="133" width="5.1" height="15.0" fill="rgb(209,129,22)" rx="2" ry="2" />
+<text  x="892.12" y="143.5" ></text>
+</g>
+<g >
+<title>grrs`DYLD-STUB$$bcmp (1 samples, 0.09%)</title><rect x="653.7" y="85" width="1.1" height="15.0" fill="rgb(215,135,50)" rx="2" ry="2" />
+<text  x="656.73" y="95.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (13 samples, 1.13%)</title><rect x="43.8" y="213" width="13.3" height="15.0" fill="rgb(219,109,9)" rx="2" ry="2" />
+<text  x="46.77" y="223.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (1 samples, 0.09%)</title><rect x="173.7" y="149" width="1.1" height="15.0" fill="rgb(216,79,18)" rx="2" ry="2" />
+<text  x="176.75" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="12.0" y="277" width="1.1" height="15.0" fill="rgb(253,219,45)" rx="2" ry="2" />
+<text  x="15.05" y="287.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (1 samples, 0.09%)</title><rect x="12.0" y="261" width="1.1" height="15.0" fill="rgb(254,1,29)" rx="2" ry="2" />
+<text  x="15.05" y="271.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_free_no_lock (7 samples, 0.61%)</title><rect x="1088.7" y="149" width="7.1" height="15.0" fill="rgb(245,68,53)" rx="2" ry="2" />
+<text  x="1091.68" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (6 samples, 0.52%)</title><rect x="1161.3" y="181" width="6.2" height="15.0" fill="rgb(215,107,22)" rx="2" ry="2" />
+<text  x="1164.34" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (14 samples, 1.21%)</title><rect x="79.6" y="133" width="14.3" height="15.0" fill="rgb(244,186,1)" rx="2" ry="2" />
+<text  x="82.59" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (11 samples, 0.95%)</title><rect x="509.4" y="133" width="11.3" height="15.0" fill="rgb(211,118,33)" rx="2" ry="2" />
+<text  x="512.43" y="143.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (45 samples, 3.90%)</title><rect x="462.4" y="133" width="46.0" height="15.0" fill="rgb(225,81,13)" rx="2" ry="2" />
+<text  x="465.35" y="143.5" >grrs..</text>
+</g>
+<g >
+<title>grrs`grrs::eval::h836d00b9c3c9e0d7 (2 samples, 0.17%)</title><rect x="821.6" y="37" width="2.0" height="15.0" fill="rgb(240,2,42)" rx="2" ry="2" />
+<text  x="824.57" y="47.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_malloc (1 samples, 0.09%)</title><rect x="39.7" y="165" width="1.0" height="15.0" fill="rgb(230,126,1)" rx="2" ry="2" />
+<text  x="42.68" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_free_no_lock (5 samples, 0.43%)</title><rect x="999.6" y="133" width="5.2" height="15.0" fill="rgb(250,84,44)" rx="2" ry="2" />
+<text  x="1002.64" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (1 samples, 0.09%)</title><rect x="1188.0" y="277" width="1.0" height="15.0" fill="rgb(232,78,5)" rx="2" ry="2" />
+<text  x="1190.95" y="287.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_size (1 samples, 0.09%)</title><rect x="982.2" y="133" width="1.1" height="15.0" fill="rgb(249,174,38)" rx="2" ry="2" />
+<text  x="985.25" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (2 samples, 0.17%)</title><rect x="28.4" y="229" width="2.1" height="15.0" fill="rgb(253,45,14)" rx="2" ry="2" />
+<text  x="31.42" y="239.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="24.3" y="181" width="1.1" height="15.0" fill="rgb(226,37,10)" rx="2" ry="2" />
+<text  x="27.33" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (1 samples, 0.09%)</title><rect x="1004.8" y="149" width="1.0" height="15.0" fill="rgb(237,182,34)" rx="2" ry="2" />
+<text  x="1007.76" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (1 samples, 0.09%)</title><rect x="1083.6" y="149" width="1.0" height="15.0" fill="rgb(206,27,13)" rx="2" ry="2" />
+<text  x="1086.56" y="159.5" ></text>
+</g>
+<g >
+<title>libdyld.dylib`start (1,153 samples, 100.00%)</title><rect x="10.0" y="597" width="1180.0" height="15.0" fill="rgb(227,98,30)" rx="2" ry="2" />
+<text  x="13.00" y="607.5" >libdyld.dylib`start</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_from_free_list (1 samples, 0.09%)</title><rect x="300.7" y="69" width="1.0" height="15.0" fill="rgb(244,112,35)" rx="2" ry="2" />
+<text  x="303.65" y="79.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (22 samples, 1.91%)</title><rect x="146.1" y="149" width="22.5" height="15.0" fill="rgb(253,174,10)" rx="2" ry="2" />
+<text  x="149.11" y="159.5" >l..</text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (2 samples, 0.17%)</title><rect x="23.3" y="229" width="2.1" height="15.0" fill="rgb(227,159,17)" rx="2" ry="2" />
+<text  x="26.30" y="239.5" ></text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memmove$VARIANT$Haswell (2 samples, 0.17%)</title><rect x="142.0" y="165" width="2.1" height="15.0" fill="rgb(227,149,14)" rx="2" ry="2" />
+<text  x="145.02" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::eval::h836d00b9c3c9e0d7 (266 samples, 23.07%)</title><rect x="570.8" y="117" width="272.3" height="15.0" fill="rgb(241,97,26)" rx="2" ry="2" />
+<text  x="573.83" y="127.5" >grrs`grrs::eval::h836d00b9c3c9e0d7</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (14 samples, 1.21%)</title><rect x="79.6" y="117" width="14.3" height="15.0" fill="rgb(245,122,3)" rx="2" ry="2" />
+<text  x="82.59" y="127.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (2 samples, 0.17%)</title><rect x="602.6" y="101" width="2.0" height="15.0" fill="rgb(213,117,39)" rx="2" ry="2" />
+<text  x="605.56" y="111.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (1 samples, 0.09%)</title><rect x="1168.5" y="197" width="1.0" height="15.0" fill="rgb(230,228,21)" rx="2" ry="2" />
+<text  x="1171.51" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (3 samples, 0.26%)</title><rect x="1175.7" y="213" width="3.0" height="15.0" fill="rgb(207,49,31)" rx="2" ry="2" />
+<text  x="1178.67" y="223.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (1 samples, 0.09%)</title><rect x="167.6" y="117" width="1.0" height="15.0" fill="rgb(210,222,47)" rx="2" ry="2" />
+<text  x="170.61" y="127.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (1 samples, 0.09%)</title><rect x="24.3" y="197" width="1.1" height="15.0" fill="rgb(207,185,13)" rx="2" ry="2" />
+<text  x="27.33" y="207.5" ></text>
+</g>
+<g >
+<title>grrs`std::collections::hash::map::HashMap$LT$K$C$V$C$S$GT$::insert::he88c83eb029c7c46 (2 samples, 0.17%)</title><rect x="1184.9" y="261" width="2.0" height="15.0" fill="rgb(253,24,26)" rx="2" ry="2" />
+<text  x="1187.88" y="271.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (11 samples, 0.95%)</title><rect x="308.8" y="149" width="11.3" height="15.0" fill="rgb(245,88,46)" rx="2" ry="2" />
+<text  x="311.84" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (1 samples, 0.09%)</title><rect x="14.1" y="309" width="1.0" height="15.0" fill="rgb(224,87,22)" rx="2" ry="2" />
+<text  x="17.09" y="319.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,152 samples, 99.91%)</title><rect x="11.0" y="373" width="1179.0" height="15.0" fill="rgb(226,144,34)" rx="2" ry="2" />
+<text  x="14.02" y="383.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,149 samples, 99.65%)</title><rect x="14.1" y="325" width="1175.9" height="15.0" fill="rgb(249,14,1)" rx="2" ry="2" />
+<text  x="17.09" y="335.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (5 samples, 0.43%)</title><rect x="38.7" y="197" width="5.1" height="15.0" fill="rgb(223,168,40)" rx="2" ry="2" />
+<text  x="41.66" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (25 samples, 2.17%)</title><rect x="1054.9" y="149" width="25.6" height="15.0" fill="rgb(205,4,23)" rx="2" ry="2" />
+<text  x="1057.91" y="159.5" >l..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (1 samples, 0.09%)</title><rect x="12.0" y="309" width="1.1" height="15.0" fill="rgb(248,150,49)" rx="2" ry="2" />
+<text  x="15.05" y="319.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (30 samples, 2.60%)</title><rect x="271.0" y="117" width="30.7" height="15.0" fill="rgb(236,185,25)" rx="2" ry="2" />
+<text  x="273.97" y="127.5" >li..</text>
+</g>
+<g >
+<title>grrs`__rdl_dealloc (4 samples, 0.35%)</title><rect x="322.1" y="165" width="4.1" height="15.0" fill="rgb(241,119,25)" rx="2" ry="2" />
+<text  x="325.14" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::eval::h836d00b9c3c9e0d7 (232 samples, 20.12%)</title><rect x="604.6" y="101" width="237.4" height="15.0" fill="rgb(207,108,50)" rx="2" ry="2" />
+<text  x="607.61" y="111.5" >grrs`grrs::eval::h836d00b9c3c9e..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (100 samples, 8.67%)</title><rect x="346.7" y="133" width="102.3" height="15.0" fill="rgb(235,43,42)" rx="2" ry="2" />
+<text  x="349.70" y="143.5" >libsystem_ma..</text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memmove$VARIANT$Haswell (3 samples, 0.26%)</title><rect x="505.3" y="117" width="3.1" height="15.0" fill="rgb(206,195,11)" rx="2" ry="2" />
+<text  x="508.33" y="127.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (3 samples, 0.26%)</title><rect x="30.5" y="213" width="3.0" height="15.0" fill="rgb(246,228,46)" rx="2" ry="2" />
+<text  x="33.47" y="223.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (11 samples, 0.95%)</title><rect x="520.7" y="133" width="11.2" height="15.0" fill="rgb(221,154,5)" rx="2" ry="2" />
+<text  x="523.69" y="143.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (1 samples, 0.09%)</title><rect x="18.2" y="277" width="1.0" height="15.0" fill="rgb(223,146,18)" rx="2" ry="2" />
+<text  x="21.19" y="287.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (1 samples, 0.09%)</title><rect x="11.0" y="341" width="1.0" height="15.0" fill="rgb(244,86,13)" rx="2" ry="2" />
+<text  x="14.02" y="351.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (32 samples, 2.78%)</title><rect x="111.3" y="181" width="32.8" height="15.0" fill="rgb(226,112,16)" rx="2" ry="2" />
+<text  x="114.32" y="191.5" >gr..</text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (5 samples, 0.43%)</title><rect x="38.7" y="213" width="5.1" height="15.0" fill="rgb(219,73,48)" rx="2" ry="2" />
+<text  x="41.66" y="223.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (111 samples, 9.63%)</title><rect x="340.6" y="149" width="113.6" height="15.0" fill="rgb(211,67,14)" rx="2" ry="2" />
+<text  x="343.56" y="159.5" >grrs`_$LT$allo..</text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,152 samples, 99.91%)</title><rect x="11.0" y="389" width="1179.0" height="15.0" fill="rgb(228,2,2)" rx="2" ry="2" />
+<text  x="14.02" y="399.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (1 samples, 0.09%)</title><rect x="14.1" y="245" width="1.0" height="15.0" fill="rgb(252,132,1)" rx="2" ry="2" />
+<text  x="17.09" y="255.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (8 samples, 0.69%)</title><rect x="1142.9" y="181" width="8.2" height="15.0" fill="rgb(243,145,54)" rx="2" ry="2" />
+<text  x="1145.92" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (10 samples, 0.87%)</title><rect x="1119.4" y="165" width="10.2" height="15.0" fill="rgb(228,182,3)" rx="2" ry="2" />
+<text  x="1122.38" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_malloc (3 samples, 0.26%)</title><rect x="354.9" y="101" width="3.1" height="15.0" fill="rgb(234,203,15)" rx="2" ry="2" />
+<text  x="357.89" y="111.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (1 samples, 0.09%)</title><rect x="1179.8" y="197" width="1.0" height="15.0" fill="rgb(220,59,14)" rx="2" ry="2" />
+<text  x="1182.77" y="207.5" ></text>
+</g>
+<g >
+<title>grrs`__rdl_dealloc (2 samples, 0.17%)</title><rect x="535.0" y="149" width="2.1" height="15.0" fill="rgb(244,196,43)" rx="2" ry="2" />
+<text  x="538.01" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="93.9" y="149" width="1.0" height="15.0" fill="rgb(242,195,28)" rx="2" ry="2" />
+<text  x="96.92" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from::h0f3e75b4ff0fa3f0 (1,152 samples, 99.91%)</title><rect x="11.0" y="485" width="1179.0" height="15.0" fill="rgb(227,204,47)" rx="2" ry="2" />
+<text  x="14.02" y="495.5" >grrs`grrs::from::h0f3e75b4ff0fa3f0</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (37 samples, 3.21%)</title><rect x="467.5" y="85" width="37.8" height="15.0" fill="rgb(212,89,36)" rx="2" ry="2" />
+<text  x="470.47" y="95.5" >lib..</text>
+</g>
+<g >
+<title>grrs`DYLD-STUB$$memcpy (1 samples, 0.09%)</title><rect x="339.5" y="149" width="1.1" height="15.0" fill="rgb(222,59,4)" rx="2" ry="2" />
+<text  x="342.54" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (1 samples, 0.09%)</title><rect x="12.0" y="325" width="1.1" height="15.0" fill="rgb(221,36,13)" rx="2" ry="2" />
+<text  x="15.05" y="335.5" ></text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memmove$VARIANT$Haswell (5 samples, 0.43%)</title><rect x="449.0" y="133" width="5.2" height="15.0" fill="rgb(253,22,53)" rx="2" ry="2" />
+<text  x="452.05" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (13 samples, 1.13%)</title><rect x="60.1" y="149" width="13.4" height="15.0" fill="rgb(232,141,50)" rx="2" ry="2" />
+<text  x="63.15" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (20 samples, 1.73%)</title><rect x="147.1" y="101" width="20.5" height="15.0" fill="rgb(239,20,5)" rx="2" ry="2" />
+<text  x="150.14" y="111.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (2 samples, 0.17%)</title><rect x="1137.8" y="181" width="2.1" height="15.0" fill="rgb(229,31,19)" rx="2" ry="2" />
+<text  x="1140.81" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_free_definite_size (1 samples, 0.09%)</title><rect x="1151.1" y="181" width="1.0" height="15.0" fill="rgb(251,133,36)" rx="2" ry="2" />
+<text  x="1154.11" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (1 samples, 0.09%)</title><rect x="508.4" y="133" width="1.0" height="15.0" fill="rgb(235,134,33)" rx="2" ry="2" />
+<text  x="511.40" y="143.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (293 samples, 25.41%)</title><rect x="543.2" y="149" width="299.9" height="15.0" fill="rgb(211,221,32)" rx="2" ry="2" />
+<text  x="546.20" y="159.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (5 samples, 0.43%)</title><rect x="33.5" y="229" width="5.2" height="15.0" fill="rgb(227,190,47)" rx="2" ry="2" />
+<text  x="36.54" y="239.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (1 samples, 0.09%)</title><rect x="1183.9" y="245" width="1.0" height="15.0" fill="rgb(207,226,52)" rx="2" ry="2" />
+<text  x="1186.86" y="255.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (1 samples, 0.09%)</title><rect x="14.1" y="261" width="1.0" height="15.0" fill="rgb(209,211,20)" rx="2" ry="2" />
+<text  x="17.09" y="271.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_size (1 samples, 0.09%)</title><rect x="1080.5" y="149" width="1.0" height="15.0" fill="rgb(247,177,15)" rx="2" ry="2" />
+<text  x="1083.49" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (6 samples, 0.52%)</title><rect x="168.6" y="165" width="6.2" height="15.0" fill="rgb(224,180,43)" rx="2" ry="2" />
+<text  x="171.63" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`DYLD-STUB$$bcmp (1 samples, 0.09%)</title><rect x="601.5" y="101" width="1.1" height="15.0" fill="rgb(213,99,24)" rx="2" ry="2" />
+<text  x="604.54" y="111.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (26 samples, 2.25%)</title><rect x="894.2" y="133" width="26.6" height="15.0" fill="rgb(213,150,47)" rx="2" ry="2" />
+<text  x="897.23" y="143.5" >l..</text>
+</g>
+<g >
+<title>grrs`0x1 (1,153 samples, 100.00%)</title><rect x="10.0" y="613" width="1180.0" height="15.0" fill="rgb(224,113,29)" rx="2" ry="2" />
+<text  x="13.00" y="623.5" >grrs`0x1</text>
+</g>
+<g >
+<title>grrs`std::collections::hash::map::HashMap$LT$K$C$V$C$S$GT$::insert::he88c83eb029c7c46 (36 samples, 3.12%)</title><rect x="1101.0" y="181" width="36.8" height="15.0" fill="rgb(207,145,8)" rx="2" ry="2" />
+<text  x="1103.96" y="191.5" >grr..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (25 samples, 2.17%)</title><rect x="276.1" y="85" width="25.6" height="15.0" fill="rgb(244,60,13)" rx="2" ry="2" />
+<text  x="279.09" y="95.5" >l..</text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (1 samples, 0.09%)</title><rect x="1099.9" y="165" width="1.1" height="15.0" fill="rgb(233,150,3)" rx="2" ry="2" />
+<text  x="1102.94" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (15 samples, 1.30%)</title><rect x="58.1" y="197" width="15.4" height="15.0" fill="rgb(227,196,29)" rx="2" ry="2" />
+<text  x="61.10" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (1 samples, 0.09%)</title><rect x="1118.4" y="165" width="1.0" height="15.0" fill="rgb(243,111,40)" rx="2" ry="2" />
+<text  x="1121.36" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_size (1 samples, 0.09%)</title><rect x="16.1" y="277" width="1.1" height="15.0" fill="rgb(253,153,5)" rx="2" ry="2" />
+<text  x="19.14" y="287.5" ></text>
+</g>
+<g >
+<title>grrs`DYLD-STUB$$bcmp (1 samples, 0.09%)</title><rect x="110.3" y="181" width="1.0" height="15.0" fill="rgb(245,21,41)" rx="2" ry="2" />
+<text  x="113.29" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (1 samples, 0.09%)</title><rect x="37.6" y="213" width="1.1" height="15.0" fill="rgb(205,100,15)" rx="2" ry="2" />
+<text  x="40.63" y="223.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (28 samples, 2.43%)</title><rect x="113.4" y="165" width="28.6" height="15.0" fill="rgb(227,150,16)" rx="2" ry="2" />
+<text  x="116.37" y="175.5" >li..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (2 samples, 0.17%)</title><rect x="1082.5" y="165" width="2.1" height="15.0" fill="rgb(207,40,32)" rx="2" ry="2" />
+<text  x="1085.54" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_from_free_list (4 samples, 0.35%)</title><rect x="501.2" y="53" width="4.1" height="15.0" fill="rgb(248,120,27)" rx="2" ry="2" />
+<text  x="504.24" y="63.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_malloc (2 samples, 0.17%)</title><rect x="206.5" y="117" width="2.0" height="15.0" fill="rgb(234,147,31)" rx="2" ry="2" />
+<text  x="209.50" y="127.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (28 samples, 2.43%)</title><rect x="273.0" y="101" width="28.7" height="15.0" fill="rgb(232,16,36)" rx="2" ry="2" />
+<text  x="276.02" y="111.5" >li..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (11 samples, 0.95%)</title><rect x="62.2" y="133" width="11.3" height="15.0" fill="rgb(236,137,54)" rx="2" ry="2" />
+<text  x="65.19" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (1 samples, 0.09%)</title><rect x="1180.8" y="213" width="1.0" height="15.0" fill="rgb(216,217,54)" rx="2" ry="2" />
+<text  x="1183.79" y="223.5" ></text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (6 samples, 0.52%)</title><rect x="964.8" y="133" width="6.2" height="15.0" fill="rgb(241,117,3)" rx="2" ry="2" />
+<text  x="967.85" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (1 samples, 0.09%)</title><rect x="20.2" y="245" width="1.1" height="15.0" fill="rgb(220,125,41)" rx="2" ry="2" />
+<text  x="23.23" y="255.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (1 samples, 0.09%)</title><rect x="11.0" y="325" width="1.0" height="15.0" fill="rgb(214,66,4)" rx="2" ry="2" />
+<text  x="14.02" y="335.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (11 samples, 0.95%)</title><rect x="1084.6" y="165" width="11.2" height="15.0" fill="rgb(230,28,25)" rx="2" ry="2" />
+<text  x="1087.59" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (31 samples, 2.69%)</title><rect x="271.0" y="133" width="31.7" height="15.0" fill="rgb(254,17,33)" rx="2" ry="2" />
+<text  x="273.97" y="143.5" >li..</text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (19 samples, 1.65%)</title><rect x="75.5" y="181" width="19.4" height="15.0" fill="rgb(233,139,19)" rx="2" ry="2" />
+<text  x="78.50" y="191.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (7 samples, 0.61%)</title><rect x="1027.3" y="149" width="7.1" height="15.0" fill="rgb(250,143,32)" rx="2" ry="2" />
+<text  x="1030.28" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (5 samples, 0.43%)</title><rect x="102.1" y="181" width="5.1" height="15.0" fill="rgb(231,114,36)" rx="2" ry="2" />
+<text  x="105.11" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (1 samples, 0.09%)</title><rect x="19.2" y="197" width="1.0" height="15.0" fill="rgb(235,86,34)" rx="2" ry="2" />
+<text  x="22.21" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (19 samples, 1.65%)</title><rect x="75.5" y="165" width="19.4" height="15.0" fill="rgb(220,4,39)" rx="2" ry="2" />
+<text  x="78.50" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (1 samples, 0.09%)</title><rect x="24.3" y="213" width="1.1" height="15.0" fill="rgb(250,3,12)" rx="2" ry="2" />
+<text  x="27.33" y="223.5" ></text>
+</g>
+<g >
+<title>grrs`__rdl_dealloc (1 samples, 0.09%)</title><rect x="57.1" y="213" width="1.0" height="15.0" fill="rgb(219,158,20)" rx="2" ry="2" />
+<text  x="60.08" y="223.5" ></text>
+</g>
+<g >
+<title>grrs`DYLD-STUB$$bcmp (1 samples, 0.09%)</title><rect x="187.1" y="165" width="1.0" height="15.0" fill="rgb(226,189,36)" rx="2" ry="2" />
+<text  x="190.05" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (3 samples, 0.26%)</title><rect x="54.0" y="197" width="3.1" height="15.0" fill="rgb(253,68,52)" rx="2" ry="2" />
+<text  x="57.01" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (41 samples, 3.56%)</title><rect x="463.4" y="117" width="41.9" height="15.0" fill="rgb(219,145,45)" rx="2" ry="2" />
+<text  x="466.37" y="127.5" >lib..</text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (32 samples, 2.78%)</title><rect x="269.9" y="149" width="32.8" height="15.0" fill="rgb(206,175,20)" rx="2" ry="2" />
+<text  x="272.95" y="159.5" >gr..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_free_definite_size (2 samples, 0.17%)</title><rect x="1005.8" y="149" width="2.0" height="15.0" fill="rgb(212,52,23)" rx="2" ry="2" />
+<text  x="1008.78" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (22 samples, 1.91%)</title><rect x="146.1" y="133" width="22.5" height="15.0" fill="rgb(221,71,39)" rx="2" ry="2" />
+<text  x="149.11" y="143.5" >l..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (20 samples, 1.73%)</title><rect x="147.1" y="117" width="20.5" height="15.0" fill="rgb(223,226,30)" rx="2" ry="2" />
+<text  x="150.14" y="127.5" ></text>
+</g>
+<g >
+<title>grrs`DYLD-STUB$$bcmp (1 samples, 0.09%)</title><rect x="338.5" y="149" width="1.0" height="15.0" fill="rgb(227,52,47)" rx="2" ry="2" />
+<text  x="341.52" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,152 samples, 99.91%)</title><rect x="11.0" y="405" width="1179.0" height="15.0" fill="rgb(242,157,13)" rx="2" ry="2" />
+<text  x="14.02" y="415.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (48 samples, 4.16%)</title><rect x="208.5" y="117" width="49.2" height="15.0" fill="rgb(232,24,53)" rx="2" ry="2" />
+<text  x="211.54" y="127.5" >libs..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (5 samples, 0.43%)</title><rect x="45.8" y="149" width="5.1" height="15.0" fill="rgb(236,214,22)" rx="2" ry="2" />
+<text  x="48.82" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (3 samples, 0.26%)</title><rect x="40.7" y="149" width="3.1" height="15.0" fill="rgb(251,160,52)" rx="2" ry="2" />
+<text  x="43.70" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::h0e5f37c5e5694009 (1,152 samples, 99.91%)</title><rect x="11.0" y="517" width="1179.0" height="15.0" fill="rgb(220,190,51)" rx="2" ry="2" />
+<text  x="14.02" y="527.5" >grrs`std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::h0e5f37c5e5694009</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (2 samples, 0.17%)</title><rect x="257.7" y="133" width="2.0" height="15.0" fill="rgb(250,217,32)" rx="2" ry="2" />
+<text  x="260.67" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (3 samples, 0.26%)</title><rect x="40.7" y="165" width="3.1" height="15.0" fill="rgb(249,222,28)" rx="2" ry="2" />
+<text  x="43.70" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::eval::h836d00b9c3c9e0d7 (11 samples, 0.95%)</title><rect x="812.4" y="53" width="11.2" height="15.0" fill="rgb(208,60,48)" rx="2" ry="2" />
+<text  x="815.36" y="63.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (6 samples, 0.52%)</title><rect x="44.8" y="197" width="6.1" height="15.0" fill="rgb(206,42,33)" rx="2" ry="2" />
+<text  x="47.80" y="207.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (3 samples, 0.26%)</title><rect x="30.5" y="229" width="3.0" height="15.0" fill="rgb(205,10,14)" rx="2" ry="2" />
+<text  x="33.47" y="239.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (4 samples, 0.35%)</title><rect x="33.5" y="197" width="4.1" height="15.0" fill="rgb(211,194,48)" rx="2" ry="2" />
+<text  x="36.54" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (39 samples, 3.38%)</title><rect x="465.4" y="101" width="39.9" height="15.0" fill="rgb(209,229,51)" rx="2" ry="2" />
+<text  x="468.42" y="111.5" >lib..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (17 samples, 1.47%)</title><rect x="1037.5" y="149" width="17.4" height="15.0" fill="rgb(240,44,29)" rx="2" ry="2" />
+<text  x="1040.51" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (15 samples, 1.30%)</title><rect x="972.0" y="149" width="15.4" height="15.0" fill="rgb(229,107,47)" rx="2" ry="2" />
+<text  x="975.01" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,140 samples, 98.87%)</title><rect x="20.2" y="277" width="1166.7" height="15.0" fill="rgb(241,5,45)" rx="2" ry="2" />
+<text  x="23.23" y="287.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (8 samples, 0.69%)</title><rect x="833.9" y="85" width="8.1" height="15.0" fill="rgb(213,130,20)" rx="2" ry="2" />
+<text  x="836.85" y="95.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (1 samples, 0.09%)</title><rect x="17.2" y="293" width="1.0" height="15.0" fill="rgb(225,55,44)" rx="2" ry="2" />
+<text  x="20.16" y="303.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (898 samples, 77.88%)</title><rect x="181.9" y="181" width="919.1" height="15.0" fill="rgb(236,218,19)" rx="2" ry="2" />
+<text  x="184.93" y="191.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (1 samples, 0.09%)</title><rect x="1171.6" y="197" width="1.0" height="15.0" fill="rgb(251,78,26)" rx="2" ry="2" />
+<text  x="1174.58" y="207.5" ></text>
+</g>
+<g >
+<title>grrs`__rust_maybe_catch_panic (1,152 samples, 99.91%)</title><rect x="11.0" y="549" width="1179.0" height="15.0" fill="rgb(212,229,3)" rx="2" ry="2" />
+<text  x="14.02" y="559.5" >grrs`__rust_maybe_catch_panic</text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (10 samples, 0.87%)</title><rect x="802.1" y="53" width="10.3" height="15.0" fill="rgb(230,205,40)" rx="2" ry="2" />
+<text  x="805.12" y="63.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (3 samples, 0.26%)</title><rect x="1034.4" y="149" width="3.1" height="15.0" fill="rgb(218,40,50)" rx="2" ry="2" />
+<text  x="1037.44" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (1 samples, 0.09%)</title><rect x="1167.5" y="197" width="1.0" height="15.0" fill="rgb(223,5,22)" rx="2" ry="2" />
+<text  x="1170.48" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (1 samples, 0.09%)</title><rect x="1081.5" y="165" width="1.0" height="15.0" fill="rgb(209,176,7)" rx="2" ry="2" />
+<text  x="1084.52" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`std::rt::lang_start_internal::hcf96e32a124891dc (1,152 samples, 99.91%)</title><rect x="11.0" y="565" width="1179.0" height="15.0" fill="rgb(234,77,41)" rx="2" ry="2" />
+<text  x="14.02" y="575.5" >grrs`std::rt::lang_start_internal::hcf96e32a124891dc</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (3 samples, 0.26%)</title><rect x="50.9" y="181" width="3.1" height="15.0" fill="rgb(242,185,46)" rx="2" ry="2" />
+<text  x="53.94" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (3 samples, 0.26%)</title><rect x="30.5" y="165" width="3.0" height="15.0" fill="rgb(244,200,49)" rx="2" ry="2" />
+<text  x="33.47" y="175.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,152 samples, 99.91%)</title><rect x="11.0" y="421" width="1179.0" height="15.0" fill="rgb(222,126,38)" rx="2" ry="2" />
+<text  x="14.02" y="431.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>all (1,153 samples, 100%)</title><rect x="10.0" y="629" width="1180.0" height="15.0" fill="rgb(253,133,34)" rx="2" ry="2" />
+<text  x="13.00" y="639.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_malloc (3 samples, 0.26%)</title><rect x="76.5" y="133" width="3.1" height="15.0" fill="rgb(208,67,33)" rx="2" ry="2" />
+<text  x="79.52" y="143.5" ></text>
+</g>
+<g >
+<title>grrs`std::collections::hash::map::HashMap$LT$K$C$V$C$S$GT$::insert::he88c83eb029c7c46 (1 samples, 0.09%)</title><rect x="1186.9" y="277" width="1.1" height="15.0" fill="rgb(216,57,45)" rx="2" ry="2" />
+<text  x="1189.93" y="287.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (45 samples, 3.90%)</title><rect x="211.6" y="101" width="46.1" height="15.0" fill="rgb(206,35,46)" rx="2" ry="2" />
+<text  x="214.61" y="111.5" >libs..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_free_definite_size (4 samples, 0.35%)</title><rect x="1095.8" y="165" width="4.1" height="15.0" fill="rgb(241,206,3)" rx="2" ry="2" />
+<text  x="1098.85" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (3 samples, 0.26%)</title><rect x="446.0" y="117" width="3.0" height="15.0" fill="rgb(229,88,16)" rx="2" ry="2" />
+<text  x="448.98" y="127.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::eval::h836d00b9c3c9e0d7 (38 samples, 3.30%)</title><rect x="784.7" y="69" width="38.9" height="15.0" fill="rgb(217,67,7)" rx="2" ry="2" />
+<text  x="787.73" y="79.5" >grr..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (1 samples, 0.09%)</title><rect x="14.1" y="277" width="1.0" height="15.0" fill="rgb(240,216,10)" rx="2" ry="2" />
+<text  x="17.09" y="287.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (7 samples, 0.61%)</title><rect x="23.3" y="245" width="7.2" height="15.0" fill="rgb(233,73,1)" rx="2" ry="2" />
+<text  x="26.30" y="255.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (1 samples, 0.09%)</title><rect x="19.2" y="261" width="1.0" height="15.0" fill="rgb(234,52,47)" rx="2" ry="2" />
+<text  x="22.21" y="271.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (1 samples, 0.09%)</title><rect x="1171.6" y="181" width="1.0" height="15.0" fill="rgb(206,197,2)" rx="2" ry="2" />
+<text  x="1174.58" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (1 samples, 0.09%)</title><rect x="842.0" y="101" width="1.1" height="15.0" fill="rgb(247,0,51)" rx="2" ry="2" />
+<text  x="845.04" y="111.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,152 samples, 99.91%)</title><rect x="11.0" y="469" width="1179.0" height="15.0" fill="rgb(212,61,18)" rx="2" ry="2" />
+<text  x="14.02" y="479.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>grrs`grrs::main::h3b837e3ac98207fd (1,152 samples, 99.91%)</title><rect x="11.0" y="501" width="1179.0" height="15.0" fill="rgb(220,7,47)" rx="2" ry="2" />
+<text  x="14.02" y="511.5" >grrs`grrs::main::h3b837e3ac98207fd</text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (1,152 samples, 99.91%)</title><rect x="11.0" y="453" width="1179.0" height="15.0" fill="rgb(233,85,1)" rx="2" ry="2" />
+<text  x="14.02" y="463.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (3 samples, 0.26%)</title><rect x="1139.9" y="181" width="3.0" height="15.0" fill="rgb(212,131,10)" rx="2" ry="2" />
+<text  x="1142.85" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (63 samples, 5.46%)</title><rect x="195.2" y="149" width="64.5" height="15.0" fill="rgb(208,37,53)" rx="2" ry="2" />
+<text  x="198.24" y="159.5" >libsyst..</text>
+</g>
+<g >
+<title>libsystem_platform.dylib`_platform_memcmp (1 samples, 0.09%)</title><rect x="320.1" y="149" width="1.0" height="15.0" fill="rgb(243,222,46)" rx="2" ry="2" />
+<text  x="323.10" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$alloc..string..String$u20$as$u20$core..clone..Clone$GT$::clone::h08e10aea71e4d3f5 (72 samples, 6.24%)</title><rect x="188.1" y="165" width="73.7" height="15.0" fill="rgb(232,96,24)" rx="2" ry="2" />
+<text  x="191.07" y="175.5" >grrs`_$L..</text>
+</g>
+<g >
+<title>grrs`std::collections::hash::map::HashMap$LT$K$C$V$C$S$GT$::insert::he88c83eb029c7c46 (14 samples, 1.21%)</title><rect x="1153.2" y="197" width="14.3" height="15.0" fill="rgb(210,161,11)" rx="2" ry="2" />
+<text  x="1156.16" y="207.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (1 samples, 0.09%)</title><rect x="19.2" y="245" width="1.0" height="15.0" fill="rgb(243,12,48)" rx="2" ry="2" />
+<text  x="22.21" y="255.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (2 samples, 0.17%)</title><rect x="26.4" y="213" width="2.0" height="15.0" fill="rgb(237,53,2)" rx="2" ry="2" />
+<text  x="29.37" y="223.5" ></text>
+</g>
+<g >
+<title>grrs`__rust_alloc (1 samples, 0.09%)</title><rect x="537.1" y="149" width="1.0" height="15.0" fill="rgb(218,199,51)" rx="2" ry="2" />
+<text  x="540.06" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_malloc_should_clear (4 samples, 0.35%)</title><rect x="33.5" y="165" width="4.1" height="15.0" fill="rgb(215,192,25)" rx="2" ry="2" />
+<text  x="36.54" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc (1 samples, 0.09%)</title><rect x="18.2" y="261" width="1.0" height="15.0" fill="rgb(227,103,51)" rx="2" ry="2" />
+<text  x="21.19" y="271.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (2 samples, 0.17%)</title><rect x="1140.9" y="165" width="2.0" height="15.0" fill="rgb(220,177,20)" rx="2" ry="2" />
+<text  x="1143.88" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (1 samples, 0.09%)</title><rect x="1189.0" y="309" width="1.0" height="15.0" fill="rgb(210,75,0)" rx="2" ry="2" />
+<text  x="1191.98" y="319.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_size (1 samples, 0.09%)</title><rect x="1121.4" y="149" width="1.1" height="15.0" fill="rgb(235,65,33)" rx="2" ry="2" />
+<text  x="1124.43" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (11 samples, 0.95%)</title><rect x="1043.7" y="133" width="11.2" height="15.0" fill="rgb(249,142,38)" rx="2" ry="2" />
+<text  x="1046.65" y="143.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`default_zone_free_definite_size (1 samples, 0.09%)</title><rect x="971.0" y="149" width="1.0" height="15.0" fill="rgb(208,126,48)" rx="2" ry="2" />
+<text  x="973.99" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`szone_free_definite_size (1 samples, 0.09%)</title><rect x="1181.8" y="229" width="1.0" height="15.0" fill="rgb(235,63,1)" rx="2" ry="2" />
+<text  x="1184.81" y="239.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$std..collections..hash..map..DefaultHasher$u20$as$u20$core..hash..Hasher$GT$::write::h5a315223f4f87c87 (1 samples, 0.09%)</title><rect x="321.1" y="165" width="1.0" height="15.0" fill="rgb(252,172,13)" rx="2" ry="2" />
+<text  x="324.12" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_free_no_lock (1 samples, 0.09%)</title><rect x="1183.9" y="229" width="1.0" height="15.0" fill="rgb(214,124,6)" rx="2" ry="2" />
+<text  x="1186.86" y="239.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (2 samples, 0.17%)</title><rect x="1159.3" y="181" width="2.0" height="15.0" fill="rgb(215,155,51)" rx="2" ry="2" />
+<text  x="1162.30" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (1 samples, 0.09%)</title><rect x="18.2" y="213" width="1.0" height="15.0" fill="rgb(231,34,32)" rx="2" ry="2" />
+<text  x="21.19" y="223.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (6 samples, 0.52%)</title><rect x="514.5" y="117" width="6.2" height="15.0" fill="rgb(232,79,28)" rx="2" ry="2" />
+<text  x="517.54" y="127.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (3 samples, 0.26%)</title><rect x="50.9" y="197" width="3.1" height="15.0" fill="rgb(251,4,3)" rx="2" ry="2" />
+<text  x="53.94" y="207.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (1 samples, 0.09%)</title><rect x="19.2" y="277" width="1.0" height="15.0" fill="rgb(253,47,14)" rx="2" ry="2" />
+<text  x="22.21" y="287.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (42 samples, 3.64%)</title><rect x="920.8" y="133" width="43.0" height="15.0" fill="rgb(239,131,49)" rx="2" ry="2" />
+<text  x="923.84" y="143.5" >libs..</text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (2 samples, 0.17%)</title><rect x="21.3" y="261" width="2.0" height="15.0" fill="rgb(241,215,46)" rx="2" ry="2" />
+<text  x="24.26" y="271.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`malloc_zone_malloc (1 samples, 0.09%)</title><rect x="18.2" y="245" width="1.0" height="15.0" fill="rgb(236,179,32)" rx="2" ry="2" />
+<text  x="21.19" y="255.5" ></text>
+</g>
+<g >
+<title>grrs`_$LT$core..slice..Iter$LT$T$GT$$u20$as$u20$core..iter..traits..iterator..Iterator$GT$::position::_$u7b$$u7b$closure$u7d$$u7d$::h244c95c41bedf312 (36 samples, 3.12%)</title><rect x="144.1" y="181" width="36.8" height="15.0" fill="rgb(234,87,26)" rx="2" ry="2" />
+<text  x="147.07" y="191.5" >grr..</text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (3 samples, 0.26%)</title><rect x="99.0" y="181" width="3.1" height="15.0" fill="rgb(236,37,18)" rx="2" ry="2" />
+<text  x="102.04" y="191.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free (6 samples, 0.52%)</title><rect x="302.7" y="149" width="6.1" height="15.0" fill="rgb(238,56,19)" rx="2" ry="2" />
+<text  x="305.70" y="159.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_malloc_should_clear (1 samples, 0.09%)</title><rect x="445.0" y="101" width="1.0" height="15.0" fill="rgb(245,190,12)" rx="2" ry="2" />
+<text  x="447.95" y="111.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`free_tiny (8 samples, 0.69%)</title><rect x="1129.6" y="165" width="8.2" height="15.0" fill="rgb(222,130,24)" rx="2" ry="2" />
+<text  x="1132.62" y="175.5" ></text>
+</g>
+<g >
+<title>libsystem_malloc.dylib`tiny_size (7 samples, 0.61%)</title><rect x="1122.5" y="149" width="7.1" height="15.0" fill="rgb(218,57,7)" rx="2" ry="2" />
+<text  x="1125.45" y="159.5" ></text>
+</g>
+<g >
+<title>grrs`grrs::from_rec::h02bbe9737c326b12 (666 samples, 57.76%)</title><rect x="326.2" y="165" width="681.6" height="15.0" fill="rgb(238,53,49)" rx="2" ry="2" />
+<text  x="329.24" y="175.5" >grrs`grrs::from_rec::h02bbe9737c326b12</text>
+</g>
+</g>
+</svg>
