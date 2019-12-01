@@ -44,7 +44,7 @@ pub fn from(e: &Expr, var_ord: &[usize]) -> Bdd {
 		nodes: Vec::new(),
 		// indices: HashMap::new(),
 	};
-	let mut cof_asgn: Env = vec![false; var_ord.len()];
+	let mut cof_asgn: PartialEnv = HashMap::new();
 	bdd.f = from_rec(e, var_ord, &mut cof_asgn, &mut bdd.nodes, &mut HashMap::new());
 	bdd
 }
@@ -57,18 +57,18 @@ enum SupportResult {
 }
 use SupportResult::*;
 
-fn in_support(x: usize, e: &Expr, cof_asgn: &mut Env) -> bool {
+fn in_support(x: usize, e: &Expr, cof_asgn: &mut PartialEnv) -> bool {
 	in_support_rec(x, e, cof_asgn) == Dependant
 }
 
-fn in_support_rec(x: usize, e: &Expr, cof_asgn: &mut Env) -> SupportResult {
+fn in_support_rec(x: usize, e: &Expr, cof_asgn: &mut PartialEnv) -> SupportResult {
 	match e {
 		Lit(b) => IndependantConst(*b),
 		Var(x2) =>
 			if x == *x2 {
 				Dependant
 			} else {
-				match cof_asgn.get(*x2) {
+				match cof_asgn.get(x2) {
 					Some(b) => IndependantConst(*b),
 					None => IndependantVaries
 				}
@@ -100,19 +100,21 @@ fn in_support_rec(x: usize, e: &Expr, cof_asgn: &mut Env) -> SupportResult {
 	}
 }
 
-fn from_rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut Env, nodes: &mut Vec<InternalNode>, indices: &mut HashMap<InternalNode, NodeIdx>) -> FunctionNode {
+fn from_rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut PartialEnv, nodes: &mut Vec<InternalNode>, indices: &mut HashMap<InternalNode, NodeIdx>) -> FunctionNode {
 	if rem_support.is_empty() {
 		// No more cofactors to check, eval and create node.
 		// unit terminal is true, so false representation requires complementation
-		func(term, !eval(e, cof_asgn))
+		func(term, !eval_partial(e, cof_asgn))
 	} else {
 		let x = rem_support[0];
 		if in_support(x, e, cof_asgn) {
 			// Calculate positive and negative cofactors for current var and recurse
-			cof_asgn[x] = true;
+			cof_asgn.insert(x, true);
 			let pos_cof = from_rec(e, &rem_support[1..], cof_asgn, nodes, indices);
-			cof_asgn[x] = false;
+			cof_asgn.insert(x, false);
 			let neg_cof = from_rec(e, &rem_support[1..], cof_asgn, nodes, indices);
+			cof_asgn.remove(&x);
+
 			let (complement, e_complement) =
 				if pos_cof.complement {
 					// (move pos_cof negation to this func, flip since whole func is negated)
@@ -137,7 +139,7 @@ fn from_rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut Env, nodes: &mut Vec
 				},
 			}, complement) 
 		} else {
-			// cof_asgn[x] = false; // doesn't matter, needed for eval and already false by default
+			cof_asgn.insert(x, false); // doesn't matter, needed for eval
 			from_rec(e, &rem_support[1..], cof_asgn, nodes, indices)
 		}
 	}

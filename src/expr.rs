@@ -20,6 +20,7 @@ pub enum Expr {
 }
 
 pub type Env = Vec<bool>;
+pub type PartialEnv = HashMap<usize, bool>;
 
 use Expr::*;
 use BOp::*;
@@ -57,6 +58,19 @@ pub fn eval(e: &Expr, env: &Env) -> bool {
 		Binary(e1, Or , e2) => eval(&e1, env) || eval(&e2, env),
 		// Binary(e1, XOr , e2) => eval(&e1, env) ^ eval(&e2, env),
 	}
+}
+
+pub fn eval_partial(e: &Expr, env: &PartialEnv) -> bool {
+	let mut v = vec![false; env.keys().len()];
+	for i in 0..env.keys().len() {
+		match env.get(&i) {
+			Some(b) => {
+				v[i] = *b;
+			}
+			_ => {}
+		}
+	}
+	eval(e, &v)
 }
 
 // fn free_vars(e: &Expr) -> HashSet<String> {

@@ -69,5 +69,5 @@ fn main() {
 	// println!("Naive:");
 	// run_bdd!(2, naive_bdd::from, true);
 	println!("\n\nNeg Arc:");
-	run_bdd!(2, neg_arc_bdd::from, true);
+	run_bdd!(20, neg_arc_bdd::from, false);
 }
