@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 /*
@@ -21,6 +22,7 @@ pub enum Expr {
 
 pub type Env = Vec<bool>;
 pub type PartialEnv = HashMap<usize, bool>;
+pub type PartialEnvBTree = BTreeMap<usize, bool>;
 
 use Expr::*;
 use BOp::*;
@@ -61,6 +63,19 @@ pub fn eval(e: &Expr, env: &Env) -> bool {
 }
 
 pub fn eval_partial(e: &Expr, env: &PartialEnv) -> bool {
+	let mut v = vec![false; env.keys().len()];
+	for i in 0..env.keys().len() {
+		match env.get(&i) {
+			Some(b) => {
+				v[i] = *b;
+			}
+			_ => {}
+		}
+	}
+	eval(e, &v)
+}
+
+pub fn eval_partialbtree(e: &Expr, env: &PartialEnvBTree) -> bool {
 	let mut v = vec![false; env.keys().len()];
 	for i in 0..env.keys().len() {
 		match env.get(&i) {
