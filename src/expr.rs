@@ -8,7 +8,7 @@ use std::collections::HashSet;
 pub enum BOp {
     And,
     Or,
-    XOr
+    // XOr
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +38,16 @@ pub fn bin(e_1: Expr, bop: BOp, e_2: Expr) -> Expr {
 	)
 }
 
+// pub fn or_from_and(e_1: &Expr, e_2: &Expr) -> Expr {
+// 	not(
+// 		bin(
+// 			not(e_1),
+// 			And,
+// 			not(e_2),
+// 		)
+// 	)
+// }
+
 pub fn eval(e: &Expr, env: &Env) -> bool {
 	match e {
 		Lit(b) => *b,
@@ -45,7 +55,7 @@ pub fn eval(e: &Expr, env: &Env) -> bool {
 		Not(e) => !eval(&e, env),
 		Binary(e1, And, e2) => eval(&e1, env) && eval(&e2, env),
 		Binary(e1, Or , e2) => eval(&e1, env) || eval(&e2, env),
-		Binary(e1, XOr , e2) => eval(&e1, env) ^ eval(&e2, env),
+		// Binary(e1, XOr , e2) => eval(&e1, env) ^ eval(&e2, env),
 	}
 }
 

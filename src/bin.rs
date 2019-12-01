@@ -12,16 +12,26 @@ use rdd::expr::*;
 use Expr::*;
 use BOp::*;
 
-use rdd::naive_bdd::*;
+use rdd::naive_bdd;
+use rdd::neg_arc_bdd;
 
 macro_rules! run_bdd {
-	( $x:expr ) => {
-		let (comp, comp_var_ord_bad, comp_var_ord_good) = gen::comparator($x);
-		println!("\nMaking good bdd...");
-		let good_len = from(&comp, &comp_var_ord_good).nodes.len();
-		println!("Making bad bdd...");
-		let bad_len = from(&comp, &comp_var_ord_bad).nodes.len();
-		println!("{} - good bdd size: {:?}, bad bdd size: {:?}", $x, good_len, bad_len);
+	( $n:expr, $from:expr, $print:expr ) => {
+		let (comp, comp_var_ord_bad, comp_var_ord_good) = gen::comparator($n);
+		if $print {
+			println!("e: {:?}\ngood: {:?}\nbad:{:?}", comp, comp_var_ord_good, comp_var_ord_bad);
+		}
+		println!("\n***** Making good bdd...");
+		let good = $from(&comp, &comp_var_ord_good);
+		if $print {
+			println!("head: {:?}\nbdd: {}", good.f, good.textual_repr());
+		}
+		println!("\n***** Making bad bdd...");
+		let bad = $from(&comp, &comp_var_ord_bad);
+		if $print {
+			println!("head: {:?}\nbdd: {}", bad.f, bad.textual_repr());
+		}
+		println!("\n***** {} - good bdd size: {:?}, bad bdd size: {:?}", $n, good.nodes.len(), bad.nodes.len());
 	};
 }
 
@@ -56,5 +66,8 @@ fn main() {
 	// thread::sleep(Duration::from_secs(1));
 	// run_bdd!(5);
 	// thread::sleep(Duration::from_secs(1));
-	run_bdd!(10);
+	// println!("Naive:");
+	// run_bdd!(2, naive_bdd::from, true);
+	println!("\n\nNeg Arc:");
+	run_bdd!(2, neg_arc_bdd::from, true);
 }

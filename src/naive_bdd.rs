@@ -30,7 +30,7 @@ use BddNode::*;
 
 pub fn from(e: &Expr, var_ord: &[usize]) -> Bdd {
 	let mut bdd = Bdd {
-		f      : 69,
+		f      : std::usize::MAX - 1,
 		nodes  : Vec::new(),
 		indices: HashMap::new(),
 	};
@@ -81,5 +81,11 @@ fn from_rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut Env, bdd: &mut Bdd) 
 				},
 			}
 		}
+	}
+}
+
+impl Bdd {
+	pub fn textual_repr(&self) -> String {
+		"69".to_string()
 	}
 }
