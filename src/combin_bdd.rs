@@ -22,7 +22,7 @@ fn from_combinatorial_rec(e: &Expr,
 	                      computed_table: &mut BTreeMap<(FunctionNode, FunctionNode), FunctionNode>) -> FunctionNode {
 	match e {
 		Lit(b) => func(term, !b),
-		Var(x) => unique_insert(*x, func(term, false), func(term, true), nodes, unique_table),
+		Var(x) => unique_insert_btree(*x, func(term, false), func(term, true), nodes, unique_table),
 		Not(e1) => {
 			let mut f = from_combinatorial_rec(e1, var_ord, nodes, unique_table, computed_table);
 			f.complement = !f.complement;
@@ -94,7 +94,7 @@ fn bdd_and(f: FunctionNode,
 				let e = bdd_and(f_nx, g_nx, &rem_support[1..], nodes, unique_table, computed_table);
 
 				// r = findOrAddUniqueTable(x, t, e);
-				let r = unique_insert(x, t, e, nodes, unique_table);
+				let r = unique_insert_btree(x, t, e, nodes, unique_table);
 
 				// insertComputedTable({f, g}, r);
 				computed_table.insert(entry_key, r);
@@ -150,7 +150,7 @@ fn bdd_and(f: FunctionNode,
 // 	}
 // }
 
-fn unique_insert(x: usize, pos_cof: FunctionNode, neg_cof: FunctionNode, nodes: &mut Vec<InternalNode>, table: &mut BTreeMap<InternalNode, NodeIdx>) -> FunctionNode {
+fn unique_insert_btree(x: usize, pos_cof: FunctionNode, neg_cof: FunctionNode, nodes: &mut Vec<InternalNode>, table: &mut BTreeMap<InternalNode, NodeIdx>) -> FunctionNode {
 	if pos_cof == neg_cof {
 		// Both arcs point to same thing, no need for a node
 		pos_cof

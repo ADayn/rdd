@@ -22,7 +22,6 @@ macro_rules! mk_group {
 
 // naive vs 
 fn no_attr_vs_comp(c: &mut Criterion) {
-    // c.bench_function("fib 20", |b| b.iter(|| fibonacci(black_box(20))));
     mk_group!(group, c, "no_attr_vs_comp", 10);
     for bits in [4, 6, 8, 10, 12].iter() {
         group.bench_with_input(BenchmarkId::new("No Attr (Degenerate order)", bits), &bits, |b, &bits| {
@@ -54,7 +53,6 @@ fn no_attr_vs_comp(c: &mut Criterion) {
 }
 
 fn naive_vs_support_vs_simplifiedsupport_degenerate(c: &mut Criterion) {
-    // c.bench_function("fib 20", |b| b.iter(|| fibonacci(black_box(20))));
     mk_group!(group, c, "naive_vs_support_vs_simplifiedsupport_degenerate", 10);
     for bits in [4, 6, 8, 10, 12].iter() {
         group.bench_with_input(BenchmarkId::new("Cofactors (Degenerate order)", bits), &bits, |b, &bits| {
@@ -80,7 +78,6 @@ fn naive_vs_support_vs_simplifiedsupport_degenerate(c: &mut Criterion) {
 }
 
 fn naive_vs_support_vs_simplifiedsupport_ideal(c: &mut Criterion) {
-    // c.bench_function("fib 20", |b| b.iter(|| fibonacci(black_box(20))));
     mk_group!(group, c, "naive_vs_support_vs_simplifiedsupport_ideal", 10);
     for bits in [4, 6, 8, 10, 12].iter() {
         group.bench_with_input(BenchmarkId::new("Cofactors (Ideal order)", bits), &bits, |b, &bits| {
@@ -106,7 +103,6 @@ fn naive_vs_support_vs_simplifiedsupport_ideal(c: &mut Criterion) {
 }
 
 fn hash_vs_btree_vs_vec_coff(c: &mut Criterion) {
-    // c.bench_function("fib 20", |b| b.iter(|| fibonacci(black_box(20))));
     mk_group!(group, c, "hash_vs_btree_vs_vec_coff", 10);
     for bits in [4, 6, 8, 10, 12].iter() {
         group.bench_with_input(BenchmarkId::new("Naive", bits), &bits, |b, &bits| {
@@ -137,9 +133,7 @@ fn hash_vs_btree_vs_vec_coff(c: &mut Criterion) {
     group.finish();
 }
 
-// TODO: Add vec search back
 fn hash_vs_btree_memoization(c: &mut Criterion) {
-    // c.bench_function("fib 20", |b| b.iter(|| fibonacci(black_box(20))));
     mk_group!(group, c, "hash_vs_btree_memoization", 10);
     for bits in [4, 6, 8, 10, 12].iter() {
         group.bench_with_input(BenchmarkId::new("Hash", bits), &bits, |b, &bits| {

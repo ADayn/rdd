@@ -115,7 +115,7 @@ fn main() {
 
 
 	// run_bdd!(13, neg_arc_bdd::from_support_no_hash, false);
-	run_bdd!(20, combin_bdd::from_combinatorial, false);
+	run_bdd!(14, combin_bdd::from_combinatorial, false);
 	// let e = bin(Var(1), Or, Var(0));
 	// let ord = &[0, 1];
 
