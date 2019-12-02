@@ -6,45 +6,47 @@ use BOp::*;
 
 /////////////////////////
 pub fn from_combinatorial(e: &Expr, var_ord: &[usize]) -> Bdd {
+	fn rec(e: &Expr,
+							  var_ord: &[usize],
+		                      nodes: &mut Vec<InternalNode>,
+		                      unique_table: &mut BTreeMap<InternalNode, NodeIdx>,
+		                      computed_table: &mut BTreeMap<(FunctionNode, FunctionNode), FunctionNode>) -> FunctionNode {
+		match e {
+			Lit(b) => func(term, !b),
+			Var(x) => unique_insert_btree(*x, func(term, false), func(term, true), nodes, unique_table),
+			Not(e1) => {
+				let mut f = rec(e1, var_ord, nodes, unique_table, computed_table);
+				f.complement = !f.complement;
+				f
+			},
+			Binary(e1, And, e2) => {
+				let f1 = rec(e1, var_ord, nodes, unique_table, computed_table);
+				let f2 = rec(e2, var_ord, nodes, unique_table, computed_table);
+				bdd_and(f1, f2, var_ord, nodes, unique_table, computed_table)
+			},
+			Binary(e1, Or , e2) => {
+				// apply and using demorgan
+				let mut f1 = rec(e1, var_ord, nodes, unique_table, computed_table);
+				f1.complement = !f1.complement;
+				let mut f2 = rec(e2, var_ord, nodes, unique_table, computed_table);
+				f2.complement = !f2.complement;
+				let mut f = bdd_and(f1, f2, var_ord, nodes, unique_table, computed_table);
+				f.complement = !f.complement;
+				f
+			},
+		}
+	}
+
 	let mut bdd = Bdd {
 		f: func(0, false),
 		nodes: Vec::new(),
 	};
 	// let mut cof_asgn = vec![false; var_ord.len()];
-	bdd.f = from_combinatorial_rec(e, var_ord, &mut bdd.nodes, &mut BTreeMap::new(), &mut BTreeMap::new());
+	bdd.f = rec(e, var_ord, &mut bdd.nodes, &mut BTreeMap::new(), &mut BTreeMap::new());
 	bdd
 }
 
-fn from_combinatorial_rec(e: &Expr,
-						  var_ord: &[usize],
-	                      nodes: &mut Vec<InternalNode>,
-	                      unique_table: &mut BTreeMap<InternalNode, NodeIdx>,
-	                      computed_table: &mut BTreeMap<(FunctionNode, FunctionNode), FunctionNode>) -> FunctionNode {
-	match e {
-		Lit(b) => func(term, !b),
-		Var(x) => unique_insert_btree(*x, func(term, false), func(term, true), nodes, unique_table),
-		Not(e1) => {
-			let mut f = from_combinatorial_rec(e1, var_ord, nodes, unique_table, computed_table);
-			f.complement = !f.complement;
-			f
-		},
-		Binary(e1, And, e2) => {
-			let f1 = from_combinatorial_rec(e1, var_ord, nodes, unique_table, computed_table);
-			let f2 = from_combinatorial_rec(e2, var_ord, nodes, unique_table, computed_table);
-			bdd_and(f1, f2, var_ord, nodes, unique_table, computed_table)
-		},
-		Binary(e1, Or , e2) => {
-			// apply and using demorgan
-			let mut f1 = from_combinatorial_rec(e1, var_ord, nodes, unique_table, computed_table);
-			f1.complement = !f1.complement;
-			let mut f2 = from_combinatorial_rec(e2, var_ord, nodes, unique_table, computed_table);
-			f2.complement = !f2.complement;
-			let mut f = bdd_and(f1, f2, var_ord, nodes, unique_table, computed_table);
-			f.complement = !f.complement;
-			f
-		},
-	}
-}
+
 
 // fn get_or_make(n: IdentNode)
 
