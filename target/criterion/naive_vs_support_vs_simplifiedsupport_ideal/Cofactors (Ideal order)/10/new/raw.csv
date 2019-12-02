@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,72538272.0,ns,1
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,153628493.0,ns,2
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,203254591.0,ns,3
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,271395463.0,ns,4
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,333612219.0,ns,5
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,470583267.0,ns,6
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,516666022.0,ns,7
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,631683051.0,ns,8
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,622168117.0,ns,9
+naive_vs_support_vs_simplifiedsupport_ideal,Cofactors (Ideal order),10,,,674450320.0,ns,10

@@ -1,40 +1,58 @@
-// Performace iprovements:
-// String -> &str
-// vec search -> hashtable
+// check support
+// simplify expr as you go before support check 
+// String -> int
 // Add complement arcs
+// btreemap vs hashmap
+
+// Remaining Performace iprovements:
+// vec memo vs hashtable vs bdd
 // sat how many / find one
 // Find optimal ordering
-// btreemap vs hashmap
 // slice vs vec dequeue vs linked list
-// simplify expr as you go vs dont vs naive support check 
 // combinatorial bbdd
 
 
 use rdd::expr::*;
-// use Expr::*;
-// use BOp::*;
+use Expr::*;
+use BOp::*;
 
 use rdd::naive_bdd;
 use rdd::neg_arc_bdd;
+use rdd::combin_bdd;
 
 macro_rules! run_bdd {
 	( $n:expr, $from:expr, $print:expr ) => {
 		let (comp, comp_var_ord_bad, comp_var_ord_good) = gen::comparator($n);
 		if $print {
-			println!("e: {:?}\ngood: {:?}\nbad:{:?}", comp, comp_var_ord_good, comp_var_ord_bad);
+			println!("e: {:?}\ngood: {:?}\nbad: {:?}", comp, comp_var_ord_good, comp_var_ord_bad);
 		}
-		println!("\n***** Making good bdd...");
+		println!("***** Making good bdd...");
 		let good = $from(&comp, &comp_var_ord_good);
 		if $print {
-			println!("\nbdd: {}", good.textual_repr());
+			println!("bdd: {}", good.textual_repr());
 		}
-		println!("\n***** Making bad bdd...");
+		println!("***** Making bad bdd...");
 		let bad = $from(&comp, &comp_var_ord_bad);
 		if $print {
-			println!("\nbdd: {}", bad.textual_repr());
+			println!("bdd: {}", bad.textual_repr());
 		}
-		println!("\n***** {} - good bdd size: {:?}, bad bdd size: {:?}", $n, good.nodes.len(), bad.nodes.len());
+		println!("***** {} - good bdd size: {:?}, bad bdd size: {:?}", $n, good.size(), bad.size());
 	};
+	
+}
+macro_rules! run_bdd_expr {
+	( $e:expr, $order:expr, $from:expr, $print:expr ) => {
+		if $print {
+			println!("e: {:?}\norder: {:?}", $e, $order);
+		}
+		println!("***** Making bdd...");
+		let bdd = $from($e, $order);
+		if $print {
+			println!("bdd: {}", bdd.textual_repr());
+		}
+		println!("***** bdd size: {:?}\n", bdd.size());
+	};
+	
 }
 
 macro_rules! test_bdd {
@@ -93,51 +111,60 @@ fn main() {
 	// run_bdd!(2, naive_bdd::from, true);
 	// println!("\n\nNeg Arc:");
 	// run_bdd!(3, neg_arc_bdd::from, true);
-	// run_bdd!(3, neg_arc_bdd::from_support, true);
 
-	test_bdd!(vec![true, true,
-	               false, false,
-	               true, true,], naive_bdd::from_btree_mem, true);
 
-	test_bdd!(vec![true, true,
-	               false, false,
-	               false, false,
-	               true, true,
-	               false, false,], naive_bdd::from_btree_mem, true);
 
-	test_bdd!(vec![true, false,
-	               false, true,
-	               false, false,
-	               true, true,
-	               false, false,], naive_bdd::from_btree_mem, true);
+	// run_bdd!(13, neg_arc_bdd::from_support_no_hash, false);
+	run_bdd!(20, combin_bdd::from_combinatorial, false);
+	// let e = bin(Var(1), Or, Var(0));
+	// let ord = &[0, 1];
 
-	test_bdd!(vec![true, false,
-	               false, true,
-	               false, true,
-	               true, false,
-	               false, true,], naive_bdd::from_btree_mem, true);
+	// run_bdd_expr!(&e, ord, neg_arc_bdd::from_support_no_hash, true);
+	// run_bdd_expr!(&e, ord, combin_bdd::from_combinatorial, true);
 
-	test_bdd!(vec![true, false,
-	               false, true,
-	               false, false,
-	               true, true,
-	               false, false,
-	               true, false,
-	               false, false,
-	               true, true,
-	               false, false,
-	               true, true,
-	               false, false,], naive_bdd::from_btree_mem, true);
+	// test_bdd!(vec![true, true,
+	//                false, false,
+	//                true, true,], combin_bdd::from_combinatorial, true);
 
-	test_bdd!(vec![true, true,
-	               false, false,
-	               false, false,
-	               true, true,
-	               false, false,
-	               true, true,
-	               false, true,
-	               false, true,
-	               true, false,
-	               false, false,
-	               false, false,], naive_bdd::from_btree_mem, true);
+	// test_bdd!(vec![true, true,
+	//                false, false,
+	//                false, false,
+	//                true, true,
+	//                false, false,], naive_bdd::from_btree_mem, true);
+
+	// test_bdd!(vec![true, false,
+	//                false, true,
+	//                false, false,
+	//                true, true,
+	//                false, false,], naive_bdd::from_btree_mem, true);
+
+	// test_bdd!(vec![true, false,
+	//                false, true,
+	//                false, true,
+	//                true, false,
+	//                false, true,], naive_bdd::from_btree_mem, true);
+
+	// test_bdd!(vec![true, false,
+	//                false, true,
+	//                false, false,
+	//                true, true,
+	//                false, false,
+	//                true, false,
+	//                false, false,
+	//                true, true,
+	//                false, false,
+	//                true, true,
+	//                false, false,], naive_bdd::from_btree_mem, true);
+
+	// test_bdd!(vec![true, true,
+	//                false, false,
+	//                false, false,
+	//                true, true,
+	//                false, false,
+	//                true, true,
+	//                false, true,
+	//                false, true,
+	//                true, false,
+	//                false, false,
+	//                false, false,], naive_bdd::from_btree_mem, true);
 }

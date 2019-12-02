@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+hash_vs_btree_memoization,BTree,4,,,17177930.0,ns,567
+hash_vs_btree_memoization,BTree,4,,,35021772.0,ns,1134
+hash_vs_btree_memoization,BTree,4,,,50072912.0,ns,1701
+hash_vs_btree_memoization,BTree,4,,,68029117.0,ns,2268
+hash_vs_btree_memoization,BTree,4,,,82680041.0,ns,2835
+hash_vs_btree_memoization,BTree,4,,,101135752.0,ns,3402
+hash_vs_btree_memoization,BTree,4,,,113632923.0,ns,3969
+hash_vs_btree_memoization,BTree,4,,,133692185.0,ns,4536
+hash_vs_btree_memoization,BTree,4,,,150477303.0,ns,5103
+hash_vs_btree_memoization,BTree,4,,,161536866.0,ns,5670

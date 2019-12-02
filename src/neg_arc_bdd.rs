@@ -18,19 +18,19 @@ pub struct Bdd {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct InternalNode {
-	label: usize,
-	t_arc: NodeIdx,
-	e_arc: NodeIdx,
-	e_complement: bool
+	pub label: usize,
+	pub t_arc: NodeIdx,
+	pub e_arc: NodeIdx,
+	pub e_complement: bool
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FunctionNode {
-	head: NodeIdx,
-	complement: bool
+	pub head: NodeIdx,
+	pub complement: bool
 }
 
-const term: usize = std::usize::MAX;
+pub const term: usize = std::usize::MAX;
 
 impl Bdd {
 
@@ -73,9 +73,25 @@ impl Bdd {
 				})
 		}
 	}
+
+	// size of reachable bdd, not including terminal
+	pub fn size(&self) -> usize {
+		let mut visited = vec![false; self.nodes.len()];
+		self.size_rec(self.f.head, &mut visited);
+		visited.iter().filter(|&x| *x).count()
+	}
+
+	fn size_rec(&self, n: NodeIdx, visited: &mut Vec<bool>) {
+		if n != term && !visited[n] {
+			let node = &self.nodes[n];
+			self.size_rec(node.t_arc, visited);
+			self.size_rec(node.e_arc, visited);
+			visited[n] = true;
+		}
+	}
 }
 
-fn func(head: NodeIdx, complement: bool) -> FunctionNode {
+pub fn func(head: NodeIdx, complement: bool) -> FunctionNode {
 	FunctionNode {
 		head: head,
 		complement: complement
@@ -291,7 +307,7 @@ fn subst_and_simplify(e: &Expr, x: usize, b: bool) -> Expr {
 // Only used after simplification, so if the variable is here it is in the support of the func
 fn in_support_simplified(x: usize, e: &Expr) -> bool {
 	match e {
-		Lit(b) => false,
+		Lit(_) => false,
 		Var(x2) => *x2 == x,
 		Not(e1) => in_support_simplified(x, e1),
 		Binary(e1, _, e2) => in_support_simplified(x, e1) || in_support_simplified(x, e2)
@@ -356,6 +372,7 @@ fn from_support_simplified_rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut P
 			}
 		} else {
 			cof_asgn.insert(x, false); // doesn't matter, needed for eval
+			// no need to simplify again, already factored out
 			let rec = from_support_simplified_rec(e, &rem_support[1..], cof_asgn, nodes, indices);
 			cof_asgn.remove(&x);
 			rec

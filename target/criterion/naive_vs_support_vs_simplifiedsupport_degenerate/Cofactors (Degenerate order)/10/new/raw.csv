@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,75771759.0,ns,1
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,128501452.0,ns,2
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,192666777.0,ns,3
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,257277745.0,ns,4
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,344729635.0,ns,5
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,479877504.0,ns,6
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,526348767.0,ns,7
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,552828483.0,ns,8
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,604337978.0,ns,9
+naive_vs_support_vs_simplifiedsupport_degenerate,Cofactors (Degenerate order),10,,,683847521.0,ns,10
