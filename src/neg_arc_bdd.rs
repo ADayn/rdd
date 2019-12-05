@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 
 use crate::expr::*;
 use Expr::*;
 use BOp::*;
+
+use crate::expr_rc::*;
+use ExprRc::*;
 
 pub type NodeIdx = usize;
 
@@ -98,6 +100,70 @@ pub fn func(head: NodeIdx, complement: bool) -> FunctionNode {
 	}
 }
 
+pub fn unique_insert_hash(x: usize, pos_cof: FunctionNode, neg_cof: FunctionNode, nodes: &mut Vec<InternalNode>, table: &mut HashMap<InternalNode, NodeIdx>) -> FunctionNode {
+	if pos_cof == neg_cof {
+		// Both arcs point to same thing, no need for a node
+		pos_cof
+	} else {
+		let (complement, e_complement) =
+			if pos_cof.complement {
+				// (move pos_cof negation to this func, flip since whole func is negated)
+				(true, !neg_cof.complement)
+			} else {
+				(false, neg_cof.complement)
+			};
+		let node = InternalNode {
+			label: x,
+			t_arc: pos_cof.head,
+			e_arc: neg_cof.head,
+			e_complement: e_complement
+		};
+		func(match table.get(&node) {
+			Some(i) => *i,
+			None => {
+				// node has not been created as node yet, make it
+				let i = nodes.len();
+				table.insert(node.clone(), i);
+				nodes.push(node);
+				i
+			},
+		}, complement)
+	}
+}
+
+
+pub fn unique_insert_btree(x: usize, pos_cof: FunctionNode, neg_cof: FunctionNode, nodes: &mut Vec<InternalNode>, table: &mut BTreeMap<InternalNode, NodeIdx>) -> FunctionNode {
+	if pos_cof == neg_cof {
+		// Both arcs point to same thing, no need for a node
+		pos_cof
+	} else {
+		let (complement, e_complement) =
+			if pos_cof.complement {
+				// (move pos_cof negation to this func, flip since whole func is negated)
+				(true, !neg_cof.complement)
+			} else {
+				(false, neg_cof.complement)
+			};
+		let node = InternalNode {
+			label: x,
+			t_arc: pos_cof.head,
+			e_arc: neg_cof.head,
+			e_complement: e_complement
+		};
+		func(match table.get(&node) {
+			Some(i) => *i,
+			None => {
+				// node has not been created as node yet, make it
+				let i = nodes.len();
+				table.insert(node.clone(), i);
+				nodes.push(node);
+				i
+			},
+		}, complement)
+	}
+}
+
+
 /////////////////////////
 pub fn from(e: &Expr, var_ord: &[usize]) -> Bdd {
 	fn rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut Env, nodes: &mut Vec<InternalNode>, indices: &mut HashMap<InternalNode, NodeIdx>) -> FunctionNode {
@@ -112,34 +178,7 @@ pub fn from(e: &Expr, var_ord: &[usize]) -> Bdd {
 			let pos_cof = rec(e, &rem_support[1..], cof_asgn, nodes, indices);
 			cof_asgn[x] = false;
 			let neg_cof = rec(e, &rem_support[1..], cof_asgn, nodes, indices);
-			if neg_cof == pos_cof {
-				// Both arcs point to same thing, no need for a node
-				neg_cof
-			} else {
-				let (complement, e_complement) =
-					if pos_cof.complement {
-						// (move pos_cof negation to this func, flip since whole func is negated)
-						(true, !neg_cof.complement)
-					} else {
-						(false, neg_cof.complement)
-					};
-				let node = InternalNode {
-					label: x,
-					t_arc: pos_cof.head,
-					e_arc: neg_cof.head,
-					e_complement: e_complement
-				};
-				func(match indices.get(&node) {
-					Some(i) => *i,
-					None => {
-						// node has not been created as node yet, make it
-						let i = nodes.len();
-						indices.insert(node.clone(), i);
-						nodes.push(node);
-						i
-					},
-				}, complement)
-			}
+			unique_insert_hash(x, pos_cof, neg_cof, nodes, indices)
 		}
 	}
 
@@ -221,35 +260,7 @@ pub fn from_support(e: &Expr, var_ord: &[usize]) -> Bdd {
 				cof_asgn.insert(x, false);
 				let neg_cof = rec(e, &rem_support[1..], cof_asgn, nodes, indices);
 				cof_asgn.remove(&x);
-
-				if neg_cof == pos_cof {
-					// Both arcs point to same thing, no need for a node
-					neg_cof
-				} else {
-					let (complement, e_complement) =
-						if pos_cof.complement {
-							// (move pos_cof negation to this func, flip since whole func is negated)
-							(true, !neg_cof.complement)
-						} else {
-							(false, neg_cof.complement)
-						};
-					let node = InternalNode {
-						label: x,
-						t_arc: pos_cof.head,
-						e_arc: neg_cof.head,
-						e_complement: e_complement
-					};
-					func(match indices.get(&node) {
-						Some(i) => *i,
-						None => {
-							// node has not been created as node yet, make it
-							let i = nodes.len();
-							indices.insert(node.clone(), i);
-							nodes.push(node);
-							i
-						},
-					}, complement)
-				}
+				unique_insert_hash(x, pos_cof, neg_cof, nodes, indices)
 			} else {
 				cof_asgn.insert(x, false); // doesn't matter, needed for eval
 				let rec = rec(e, &rem_support[1..], cof_asgn, nodes, indices);
@@ -270,14 +281,14 @@ pub fn from_support(e: &Expr, var_ord: &[usize]) -> Bdd {
 }
 
 ////////////////////////
-fn subst_and_simplify(e: &Expr, x: usize, b: bool) -> Expr {
+pub fn subst_and_simplify(e: &Expr, x: usize, b: bool) -> Expr {
 	match e {
 		Lit(b2) => Lit(*b2),
 		Var(x2) => if x == *x2 {Lit(b)} else {Var(*x2)},
 		Not(e1) =>
 			match subst_and_simplify(e1, x, b) {
 				Lit(b1) => Lit(!b1),
-				e_simp => not(e_simp)
+				e1_simp => not(e1_simp)
 			},
 		Binary(e1, And, e2) =>
 			match subst_and_simplify(e1, x, b) {
@@ -315,7 +326,7 @@ fn in_support_simplified(x: usize, e: &Expr) -> bool {
 }
 
 pub fn from_support_simplified(e: &Expr, var_ord: &[usize]) -> Bdd {
-	fn rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut Env, nodes: &mut Vec<InternalNode>, indices: &mut BTreeMap<InternalNode, NodeIdx>) -> FunctionNode {
+	fn rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut Env, nodes: &mut Vec<InternalNode>, indices: &mut HashMap<InternalNode, NodeIdx>) -> FunctionNode {
 		if rem_support.is_empty() {
 			// No more cofactors to check, eval and create node.
 			// unit terminal is true, so false representation requires complementation
@@ -332,34 +343,7 @@ pub fn from_support_simplified(e: &Expr, var_ord: &[usize]) -> Bdd {
 				let e_neg = subst_and_simplify(e, x, false);
 				let neg_cof = rec(&e_neg, &rem_support[1..], cof_asgn, nodes, indices);
 
-				if neg_cof == pos_cof {
-					// Both arcs point to same thing, no need for a node
-					neg_cof
-				} else {
-					let (complement, e_complement) =
-						if pos_cof.complement {
-							// (move pos_cof negation to this func, flip since whole func is negated)
-							(true, !neg_cof.complement)
-						} else {
-							(false, neg_cof.complement)
-						};
-					let node = InternalNode {
-						label: x,
-						t_arc: pos_cof.head,
-						e_arc: neg_cof.head,
-						e_complement: e_complement
-					};
-					func(match indices.get(&node) {
-						Some(i) => *i,
-						None => {
-							// node has not been created as node yet, make it
-							let i = nodes.len();
-							indices.insert(node.clone(), i);
-							nodes.push(node);
-							i
-						},
-					}, complement)
-				}
+				unique_insert_hash(x, pos_cof, neg_cof, nodes, indices)
 			} else {
 				// cof_asgn[x] = false; // doesn't matter, needed for eval and set by default
 				// no need to simplify again, already factored out
@@ -375,79 +359,122 @@ pub fn from_support_simplified(e: &Expr, var_ord: &[usize]) -> Bdd {
 		// indices: HashMap::new(),
 	};
 	let mut cof_asgn: Env = vec![false; var_ord.len()];
-	bdd.f = rec(e, var_ord, &mut cof_asgn, &mut bdd.nodes, &mut BTreeMap::new());
+	bdd.f = rec(e, var_ord, &mut cof_asgn, &mut bdd.nodes, &mut HashMap::new());
 	bdd
 }
 
-// pub fn from_support_simplified_vec(e: &Expr, var_ord: &[usize]) -> Bdd {
-// 	fn from_support_simplified_vec_rec(e: &Expr, rem_support: &[usize], cof_asgn: &mut Env, nodes: &mut Vec<InternalNode>, indices: &mut BTreeMap<InternalNode, NodeIdx>) -> FunctionNode {
-// 		if rem_support.is_empty() {
-// 			// No more cofactors to check, eval and create node.
-// 			// unit terminal is true, so false representation requires complementation
-// 			func(term, !eval(e, cof_asgn))
-// 		} else {
-// 			let x = rem_support[0];
-// 			if in_support_simplified(x, e) {
-// 				// Calculate positive and negative cofactors for current var and recurse
-// 				cof_asgn[x] = true;
-// 				let e_pos = subst_and_simplify(e, x, true);
-// 				let pos_cof = from_support_simplified_rec(&e_pos, &rem_support[1..], cof_asgn, nodes, indices);
+/////////////////////////
+
+enum SimplifyResult {
+	NoChange,
+	Simplified(ExprRc)
+}
+use SimplifyResult::*;
+
+pub fn subst_and_simplify_rc(e: &ExprRc, x: usize, b: bool) -> ExprRc {
+	fn rec(e: &ExprRc, x: usize, b: bool) -> SimplifyResult {
+		match e {
+			LitRc(b2) => NoChange,
+			VarRc(x2) => if x == *x2 { Simplified(LitRc(b) )} else { NoChange },
+			NotRc(e1) =>
+				match rec(e1, x, b) {
+					NoChange => NoChange,
+					Simplified(LitRc(b1)) => Simplified(LitRc(!b1)),
+					Simplified(e1_simp) => Simplified(not_rc(e1_simp)),
+				},
+			BinaryRc(e1, And, e2) =>
+				match rec(e1, x, b) {
+					f@Simplified(LitRc(false)) => f,
+					Simplified(LitRc(true))  => rec(e2, x, b),
+					NoChange => 
+						match rec(e2, x, b) {
+							NoChange                 => NoChange,
+							f@Simplified(LitRc(false)) => f,
+							Simplified(LitRc(true))  => Simplified(e1.as_ref().clone()),
+							Simplified(e2_simp)      => Simplified(bin_rc(e1.as_ref().clone(), And, e2_simp))
+						}
+					Simplified(e1_simp) =>
+						match rec(e2, x, b) {
+							NoChange                 => Simplified(bin_rc(e1_simp, And, e2.as_ref().clone())),
+							f@Simplified(LitRc(false)) => f,
+							Simplified(LitRc(true))  => Simplified(e1.as_ref().clone()),
+							Simplified(e2_simp)      => Simplified(bin_rc(e1_simp, And, e2_simp))
+						}
+				},
+			BinaryRc(e1, Or, e2) =>
+				match rec(e1, x, b) {
+					t@Simplified(LitRc(true)) => t,
+					Simplified(LitRc(false))  => rec(e2, x, b),
+					NoChange => 
+						match rec(e2, x, b) {
+							NoChange                  => NoChange,
+							t@Simplified(LitRc(true)) => t,
+							Simplified(LitRc(false))  => Simplified(e1.as_ref().clone()),
+							Simplified(e2_simp)       => Simplified(bin_rc(e1.as_ref().clone(), Or, e2_simp))
+						}
+					Simplified(e1_simp) =>
+						match rec(e2, x, b) {
+							NoChange                  => Simplified(bin_rc(e1_simp, Or, e2.as_ref().clone())),
+							t@Simplified(LitRc(true)) => t,
+							Simplified(LitRc(false))  => Simplified(e1.as_ref().clone()),
+							Simplified(e2_simp)       => Simplified(bin_rc(e1_simp, Or, e2_simp))
+						}
+				},
+		}
+	}
+	match rec(e, x, b) {
+		NoChange => e.clone(),
+		Simplified(e_simp) => e_simp
+	}
+}
+
+// Only used after simplification, so if the variable is here it is in the support of the func
+fn in_support_simplified_rc(x: usize, e: &ExprRc) -> bool {
+	match e {
+		LitRc(_) => false,
+		VarRc(x2) => *x2 == x,
+		NotRc(e1) => in_support_simplified_rc(x, e1),
+		BinaryRc(e1, _, e2) => in_support_simplified_rc(x, e1) || in_support_simplified_rc(x, e2)
+	}
+}
+
+pub fn from_support_simplified_rc(e: &ExprRc, var_ord: &[usize]) -> Bdd {
+	fn rec(e: &ExprRc, rem_support: &[usize], cof_asgn: &mut Env, nodes: &mut Vec<InternalNode>, indices: &mut HashMap<InternalNode, NodeIdx>) -> FunctionNode {
+		if rem_support.is_empty() {
+			// No more cofactors to check, eval and create node.
+			// unit terminal is true, so false representation requires complementation
+			func(term, !eval_rc(e, cof_asgn))
+		} else {
+			let x = rem_support[0];
+			if in_support_simplified_rc(x, e) {
+				// Calculate positive and negative cofactors for current var and recurse
+				cof_asgn[x] = true;
+				let e_pos = subst_and_simplify_rc(e, x, true);
+				let pos_cof = rec(&e_pos, &rem_support[1..], cof_asgn, nodes, indices);
 				
-// 				cof_asgn.insert(x, false);
-// 				let e_neg = subst_and_simplify(e, x, false);
-// 				let neg_cof = from_support_simplified_rec(&e_neg, &rem_support[1..], cof_asgn, nodes, indices);
+				cof_asgn[x] = false;
+				let e_neg = subst_and_simplify_rc(e, x, false);
+				let neg_cof = rec(&e_neg, &rem_support[1..], cof_asgn, nodes, indices);
 
-// 				if neg_cof == pos_cof {
-// 					// Both arcs point to same thing, no need for a node
-// 					neg_cof
-// 				} else {
-// 					let (complement, e_complement) =
-// 						if pos_cof.complement {
-// 							// (move pos_cof negation to this func, flip since whole func is negated)
-// 							(true, !neg_cof.complement)
-// 						} else {
-// 							(false, neg_cof.complement)
-// 						};
-// 					let node = InternalNode {
-// 						label: x,
-// 						t_arc: pos_cof.head,
-// 						e_arc: neg_cof.head,
-// 						e_complement: e_complement
-// 					};
-// 					func(match indices.get(&node) {
-// 						Some(i) => *i,
-// 						None => {
-// 							// node has not been created as node yet, make it
-// 							let i = nodes.len();
-// 							indices.insert(node.clone(), i);
-// 							nodes.push(node);
-// 							i
-// 						},
-// 					}, complement)
-// 				}
-// 			} else {
-// 				cof_asgn.insert(x, false); // doesn't matter, needed for eval
-// 				// no need to simplify again, already factored out
-// 				let rec = from_support_simplified_rec(e, &rem_support[1..], cof_asgn, nodes, indices);
-// 				cof_asgn.remove(&x);
-// 				rec
-// 			}
-// 		}
-// 	}
+				unique_insert_hash(x, pos_cof, neg_cof, nodes, indices)
+			} else {
+				// cof_asgn[x] = false; // doesn't matter, needed for eval and set by default
+				// no need to simplify again, already factored out
+				let rec = rec(e, &rem_support[1..], cof_asgn, nodes, indices);
+				rec
+			}
+		}
+	}
 
-// 	let mut bdd = Bdd {
-// 		f: func(0, false),
-// 		nodes: Vec::new(),
-// 		// indices: HashMap::new(),
-// 	};
-// 	let mut cof_asgn: Env = vec![];
-// 	bdd.f = from_support_simplified_rec(e, var_ord, &mut cof_asgn, &mut bdd.nodes, &mut BTreeMap::new());
-// 	bdd
-// }
-
-
-
-
+	let mut bdd = Bdd {
+		f: func(0, false),
+		nodes: vec![],
+		// indices: HashMap::new(),
+	};
+	let mut cof_asgn: Env = vec![false; var_ord.len()];
+	bdd.f = rec(e, var_ord, &mut cof_asgn, &mut bdd.nodes, &mut HashMap::new());
+	bdd
+}
 
 ////////////////////////
 pub fn from_support_btree(e: &Expr, var_ord: &[usize]) -> Bdd {
@@ -466,34 +493,7 @@ pub fn from_support_btree(e: &Expr, var_ord: &[usize]) -> Bdd {
 				let neg_cof = rec(e, &rem_support[1..], cof_asgn, nodes, indices);
 				cof_asgn.remove(&x);
 
-				if neg_cof == pos_cof {
-					// Both arcs point to same thing, no need for a node
-					neg_cof
-				} else {
-					let (complement, e_complement) =
-						if pos_cof.complement {
-							// (move pos_cof negation to this func, flip since whole func is negated)
-							(true, !neg_cof.complement)
-						} else {
-							(false, neg_cof.complement)
-						};
-					let node = InternalNode {
-						label: x,
-						t_arc: pos_cof.head,
-						e_arc: neg_cof.head,
-						e_complement: e_complement
-					};
-					func(match indices.get(&node) {
-						Some(i) => *i,
-						None => {
-							// node has not been created as node yet, make it
-							let i = nodes.len();
-							indices.insert(node.clone(), i);
-							nodes.push(node);
-							i
-						},
-					}, complement)
-				}
+				unique_insert_hash(x, pos_cof, neg_cof, nodes, indices)
 			} else {
 				cof_asgn.insert(x, false); // doesn't matter, needed for eval
 				let rec = rec(e, &rem_support[1..], cof_asgn, nodes, indices);
@@ -574,35 +574,7 @@ pub fn from_support_vec(e: &Expr, var_ord: &[usize]) -> Bdd {
 				cof_asgn[x] = false;
 				let neg_cof = rec(e, &rem_support[1..], cof_asgn, cof_valid, nodes, indices);
 				cof_valid[x] = false;
-
-				if neg_cof == pos_cof {
-					// Both arcs point to same thing, no need for a node
-					neg_cof
-				} else {
-					let (complement, e_complement) =
-						if pos_cof.complement {
-							// (move pos_cof negation to this func, flip since whole func is negated)
-							(true, !neg_cof.complement)
-						} else {
-							(false, neg_cof.complement)
-						};
-					let node = InternalNode {
-						label: x,
-						t_arc: pos_cof.head,
-						e_arc: neg_cof.head,
-						e_complement: e_complement
-					};
-					func(match indices.get(&node) {
-						Some(i) => *i,
-						None => {
-							// node has not been created as node yet, make it
-							let i = nodes.len();
-							indices.insert(node.clone(), i);
-							nodes.push(node);
-							i
-						},
-					}, complement)
-				}
+				unique_insert_hash(x, pos_cof, neg_cof, nodes, indices)
 			} else {
 				cof_asgn[x] = false; // doesn't matter, needed for eval
 				cof_valid[x] = true;

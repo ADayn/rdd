@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,18575287.0,ns,4
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,36222316.0,ns,8
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,48925803.0,ns,12
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,63085344.0,ns,16
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,79377403.0,ns,20
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,93580754.0,ns,24
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,112943209.0,ns,28
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,119843936.0,ns,32
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,133155522.0,ns,36
+supportsimplified_vs_combinatorial,Complement (Degenerate order),8,,,155762827.0,ns,40

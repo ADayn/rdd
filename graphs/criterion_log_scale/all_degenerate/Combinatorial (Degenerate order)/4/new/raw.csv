@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+all_degenerate,Combinatorial (Degenerate order),4,,,15830087.0,ns,483
+all_degenerate,Combinatorial (Degenerate order),4,,,34254806.0,ns,966
+all_degenerate,Combinatorial (Degenerate order),4,,,48082558.0,ns,1449
+all_degenerate,Combinatorial (Degenerate order),4,,,63558972.0,ns,1932
+all_degenerate,Combinatorial (Degenerate order),4,,,78019780.0,ns,2415
+all_degenerate,Combinatorial (Degenerate order),4,,,93051991.0,ns,2898
+all_degenerate,Combinatorial (Degenerate order),4,,,107399807.0,ns,3381
+all_degenerate,Combinatorial (Degenerate order),4,,,131653842.0,ns,3864
+all_degenerate,Combinatorial (Degenerate order),4,,,143213001.0,ns,4347
+all_degenerate,Combinatorial (Degenerate order),4,,,161910750.0,ns,4830

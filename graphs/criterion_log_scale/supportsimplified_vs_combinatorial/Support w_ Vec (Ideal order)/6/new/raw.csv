@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,18584172.0,ns,106
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,36946953.0,ns,212
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,49255215.0,ns,318
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,66339168.0,ns,424
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,78447103.0,ns,530
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,123229818.0,ns,636
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,113901221.0,ns,742
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,126501107.0,ns,848
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,142664510.0,ns,954
+supportsimplified_vs_combinatorial,Support w/ Vec (Ideal order),6,,,161064722.0,ns,1060

@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+support_vs_supportsimplified,Support (Degenerate order),4,,,17987371.0,ns,128
+support_vs_supportsimplified,Support (Degenerate order),4,,,36666262.0,ns,256
+support_vs_supportsimplified,Support (Degenerate order),4,,,54615624.0,ns,384
+support_vs_supportsimplified,Support (Degenerate order),4,,,64999982.0,ns,512
+support_vs_supportsimplified,Support (Degenerate order),4,,,76444948.0,ns,640
+support_vs_supportsimplified,Support (Degenerate order),4,,,94894349.0,ns,768
+support_vs_supportsimplified,Support (Degenerate order),4,,,107464499.0,ns,896
+support_vs_supportsimplified,Support (Degenerate order),4,,,133776969.0,ns,1024
+support_vs_supportsimplified,Support (Degenerate order),4,,,140640171.0,ns,1152
+support_vs_supportsimplified,Support (Degenerate order),4,,,152931530.0,ns,1280

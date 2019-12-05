@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+naive_vs_support_vs_simplifiedsupport,Support,6,,,17655543.0,ns,15
+naive_vs_support_vs_simplifiedsupport,Support,6,,,36693427.0,ns,30
+naive_vs_support_vs_simplifiedsupport,Support,6,,,54405266.0,ns,45
+naive_vs_support_vs_simplifiedsupport,Support,6,,,72195619.0,ns,60
+naive_vs_support_vs_simplifiedsupport,Support,6,,,90511415.0,ns,75
+naive_vs_support_vs_simplifiedsupport,Support,6,,,107991259.0,ns,90
+naive_vs_support_vs_simplifiedsupport,Support,6,,,152436814.0,ns,105
+naive_vs_support_vs_simplifiedsupport,Support,6,,,183672521.0,ns,120
+naive_vs_support_vs_simplifiedsupport,Support,6,,,193751255.0,ns,135
+naive_vs_support_vs_simplifiedsupport,Support,6,,,197323950.0,ns,150

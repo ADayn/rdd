@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,15112766.0,ns,100
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,28104435.0,ns,200
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,42057673.0,ns,300
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,53688827.0,ns,400
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,72685136.0,ns,500
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,94532834.0,ns,600
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,111595899.0,ns,700
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,125467179.0,ns,800
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,135859682.0,ns,900
+supportsimplified_vs_combinatorial,Combinatorial (Ideal order),12,,,141487199.0,ns,1000

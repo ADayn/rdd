@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,16721526.0,ns,29
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,30929283.0,ns,58
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,45742491.0,ns,87
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,61871602.0,ns,116
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,73805066.0,ns,145
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,93298612.0,ns,174
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,105012671.0,ns,203
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,122513050.0,ns,232
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,137400261.0,ns,261
+combinatorial_btree_vs_hash,Hash (Degenerate order),8,,,151369022.0,ns,290

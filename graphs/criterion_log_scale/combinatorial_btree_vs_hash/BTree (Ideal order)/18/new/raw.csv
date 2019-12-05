@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,18234838.0,ns,57
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,33002938.0,ns,114
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,48007358.0,ns,171
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,64402486.0,ns,228
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,78534884.0,ns,285
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,95700496.0,ns,342
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,115767369.0,ns,399
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,130492991.0,ns,456
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,144688797.0,ns,513
+combinatorial_btree_vs_hash,BTree (Ideal order),18,,,165727299.0,ns,570

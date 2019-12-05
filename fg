@@ -1,0 +1,4 @@
+#!/bin/sh
+rm -f out.stacks; rm pretty-graph.svg; cargo build --release && sudo dtrace -c './target/release/rdd_main' -o out.stacks -n 'profile-997 /execname == "rdd_main"/ { @[ustack(100)] = count(); }';
+FlameGraph/stackcollapse.pl out.stacks | ./rust-unmangle  | FlameGraph/flamegraph.pl --hash --colors java --title "$1" > "graphs/$1.svg"
+FlameGraph/stackcollapse.pl out.stacks | ./rust-unmangle  | FlameGraph/flamegraph.pl --hash --colors java --reverse --title "$1" > "graphs/REV_$1.svg"

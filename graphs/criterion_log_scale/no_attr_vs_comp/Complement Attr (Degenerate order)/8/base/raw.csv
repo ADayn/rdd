@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,19163647.0,ns,4
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,39115811.0,ns,8
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,58584458.0,ns,12
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,83592885.0,ns,16
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,104623749.0,ns,20
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,122789898.0,ns,24
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,135791253.0,ns,28
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,150385783.0,ns,32
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,167166952.0,ns,36
+no_attr_vs_comp,Complement Attr (Degenerate order),8,,,194596470.0,ns,40

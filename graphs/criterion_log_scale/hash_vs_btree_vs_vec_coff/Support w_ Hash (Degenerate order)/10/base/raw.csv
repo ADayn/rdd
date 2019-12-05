@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,70911377.0,ns,1
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,141170391.0,ns,2
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,212744511.0,ns,3
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,281914048.0,ns,4
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,355623662.0,ns,5
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,502632963.0,ns,6
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,502742787.0,ns,7
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,543105614.0,ns,8
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,609163120.0,ns,9
+hash_vs_btree_vs_vec_coff,Support w/ Hash (Degenerate order),10,,,678210918.0,ns,10

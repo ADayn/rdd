@@ -13,8 +13,9 @@
 
 
 use rdd::expr::*;
-use Expr::*;
-use BOp::*;
+use rdd::expr_rc::*;
+// use Expr::*;
+// use BOp::*;
 
 use rdd::naive_bdd;
 use rdd::neg_arc_bdd;
@@ -26,17 +27,18 @@ macro_rules! run_bdd {
 		if $print {
 			println!("e: {:?}\ngood: {:?}\nbad: {:?}", comp, comp_var_ord_good, comp_var_ord_bad);
 		}
-		println!("***** Making good bdd...");
-		let good = $from(&comp, &comp_var_ord_good);
-		if $print {
-			println!("bdd: {}", good.textual_repr());
-		}
+		// println!("***** Making good bdd...");
+		// let good = $from(&comp, &comp_var_ord_good);
+		// if $print {
+		// 	println!("bdd: {}", good.textual_repr());
+		// }
 		println!("***** Making bad bdd...");
 		let bad = $from(&comp, &comp_var_ord_bad);
+
 		if $print {
 			println!("bdd: {}", bad.textual_repr());
 		}
-		println!("***** {} - good bdd size: {:?}, bad bdd size: {:?}", $n, good.size(), bad.size());
+		// println!("***** {} - good bdd size: {:?}, bad bdd size: {:?}", $n, good.size(), bad.size());
 	};
 	
 }
@@ -115,9 +117,11 @@ fn main() {
 
 
 	// run_bdd!(13, neg_arc_bdd::from_support_no_hash, false);
-	run_bdd!(14, neg_arc_bdd::from_support_vec, false);
-	run_bdd!(14, neg_arc_bdd::from_support_simplified, false);
-	run_bdd!(14, combin_bdd::from_combinatorial, false);
+	// run_bdd!(14, neg_arc_bdd::from_support_vec, false);
+	// run_bdd!(12, neg_arc_bdd::from_support_simplified, false);
+	// run_bdd!(2, neg_arc_bdd::from_support_vec, true);
+	// run_bdd!(12, neg_arc_bdd::from_support_simplified_rc, false);
+	// run_bdd!(14, combin_bdd::from_combinatorial, false);
 	// let e = bin(Var(1), Or, Var(0));
 	// let ord = &[0, 1];
 

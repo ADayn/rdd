@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+comp_vs_support,Complement (Ideal order),6,,,18109386.0,ns,67
+comp_vs_support,Complement (Ideal order),6,,,34720873.0,ns,134
+comp_vs_support,Complement (Ideal order),6,,,54423312.0,ns,201
+comp_vs_support,Complement (Ideal order),6,,,67201241.0,ns,268
+comp_vs_support,Complement (Ideal order),6,,,86283592.0,ns,335
+comp_vs_support,Complement (Ideal order),6,,,131612355.0,ns,402
+comp_vs_support,Complement (Ideal order),6,,,209445057.0,ns,469
+comp_vs_support,Complement (Ideal order),6,,,170967034.0,ns,536
+comp_vs_support,Complement (Ideal order),6,,,181790103.0,ns,603
+comp_vs_support,Complement (Ideal order),6,,,209703623.0,ns,670

@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,16898435.0,ns,161
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,33539104.0,ns,322
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,49872456.0,ns,483
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,61117394.0,ns,644
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,71993349.0,ns,805
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,90331087.0,ns,966
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,104145858.0,ns,1127
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,139823985.0,ns,1288
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,143325997.0,ns,1449
+hash_vs_btree_vs_vec_coff,Support w/ BTree (Degeneratee),4,,,142340754.0,ns,1610

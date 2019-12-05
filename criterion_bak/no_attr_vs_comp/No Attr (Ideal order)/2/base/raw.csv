@@ -1,0 +1,11 @@
+group,function,value,throughput_num,throughput_type,sample_measured_value,unit,iteration_count
+no_attr_vs_comp,No Attr (Ideal order),2,,,15648137.0,ns,3400
+no_attr_vs_comp,No Attr (Ideal order),2,,,28048172.0,ns,6800
+no_attr_vs_comp,No Attr (Ideal order),2,,,41966345.0,ns,10200
+no_attr_vs_comp,No Attr (Ideal order),2,,,47433678.0,ns,13600
+no_attr_vs_comp,No Attr (Ideal order),2,,,61431326.0,ns,17000
+no_attr_vs_comp,No Attr (Ideal order),2,,,73570667.0,ns,20400
+no_attr_vs_comp,No Attr (Ideal order),2,,,84525574.0,ns,23800
+no_attr_vs_comp,No Attr (Ideal order),2,,,99309375.0,ns,27200
+no_attr_vs_comp,No Attr (Ideal order),2,,,128415014.0,ns,30600
+no_attr_vs_comp,No Attr (Ideal order),2,,,124534992.0,ns,34000

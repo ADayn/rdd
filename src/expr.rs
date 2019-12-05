@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 
 /*
  * Expressions
  */
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum BOp {
     And,
     Or,
@@ -55,7 +54,7 @@ pub fn eval(e: &Expr, env: &Env) -> bool {
 	match e {
 		Lit(b) => *b,
 		Var(x) => env[*x],
-		Not(e) => !eval(&e, env),
+		Not(e1) => !eval(&e1, env),
 		Binary(e1, And, e2) => eval(&e1, env) && eval(&e2, env),
 		Binary(e1, Or , e2) => eval(&e1, env) || eval(&e2, env),
 		// Binary(e1, XOr , e2) => eval(&e1, env) ^ eval(&e2, env),
@@ -112,9 +111,6 @@ pub fn eval_partialbtree(e: &Expr, env: &PartialEnvBTree) -> bool {
 
 pub mod gen {
 	use crate::expr::*;
-
-	use Expr::*;
-	use BOp::*;
 
 	// comparator function for xn..1 > yn..1
 	pub fn comparator<'a>(n_bits: usize) -> (Expr, Vec<usize>, Vec<usize>) {
